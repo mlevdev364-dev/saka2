@@ -616,6 +616,9 @@
     };
     instance.renderBuilderPage();
   };
+  window.addBuilderSection = function () {
+    window.FormGearBuilderInstance.addBuilderSection();
+  };
   window.saveBuilderForm = function () {
     window.FormGearBuilderInstance.saveBuilderDefinition();
   };

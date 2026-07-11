@@ -8,6 +8,7 @@
   "orientation": "portrait",
   "background_color": "#0b1120",
   "theme_color": "#3b82f6",
+  "scope": "./",
   "categories": [
     "productivity",
     "business"
@@ -66,7 +67,7 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "Lihat progres dan analisis",
-      "url": "/sakahybrid/#dashboard",
+      "url": "./#dashboard",
       "icons": [
         {
           "src": "launchericon-96x96.png",
@@ -79,7 +80,7 @@
       "name": "Input Data",
       "short_name": "Input",
       "description": "Input data SLS harian",
-      "url": "/sakahybrid/#input",
+      "url": "./#input",
       "icons": [
         {
           "src": "launchericon-96x96.png",
@@ -92,7 +93,7 @@
       "name": "History",
       "short_name": "History",
       "description": "Lihat riwayat analisis",
-      "url": "/sakahybrid/#history",
+      "url": "./#history",
       "icons": [
         {
           "src": "launchericon-96x96.png",
