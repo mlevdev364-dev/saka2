@@ -4,7 +4,7 @@
  
 **Monitoring progres lapangan SLS, real-time, offline-ready.**
 
-![Version](https://img.shields.io/badge/version-5.6.0-3b82f6?style=flat-square)
+![Version](https://img.shields.io/badge/version-5.7.0-3b82f6?style=flat-square)
 ![Status](https://img.shields.io/badge/status-stable-10b981?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-installable-10b981?style=flat-square)
 ![Build Step](https://img.shields.io/badge/build_step-none-f59e0b?style=flat-square)
@@ -158,6 +158,7 @@ Seluruh indikator visual dalam aplikasi menggunakan [Bootstrap Icons](https://ic
 
 | Versi | Ringkasan |
 |---|---|
+| 5.7.0 | Perbaikan bug FormGear: Form Builder yang tidak bisa dipakai sama sekali (ID kontainer salah), Firebase manager yang tidak ter-attach ke `window` (upload selalu gagal), listener Firebase yang menumpuk, dan inisialisasi ganda saat membuka tab FormGear. Tab FormGear kini menampilkan katalog form saja, form penuh tampil setelah kartu diklik. Form Builder kini 2 kolom penuh layar di desktop/tablet. |
 | 5.6.0 | Integrasi FormGear lokal di folder assets, perbaikan render form dinamis, dan pembaruan semver aplikasi lintas halaman, service worker, dan manifest PWA. |
 | 5.5.0 | Standardisasi seluruh ikon ke Bootstrap Icons (emoji dihapus total); sistem Semantic Versioning terpadu lintas berkas dengan sinkronisasi versi otomatis saat runtime antara halaman, Service Worker, dan manifest PWA. |
 | 5.4.5 | Penyempurnaan Terms of Service & Privacy Policy; penambahan Consent Gate dan PIN Lock opsional. |

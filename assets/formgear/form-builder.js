@@ -141,9 +141,38 @@
         )
         .join("");
 
+      // Dropdown "Form yang Diedit" -- sebelumnya ada <select id="builder-template-selector">
+      // statis di index.html yang TIDAK PERNAH diisi <option> oleh kode manapun
+      // (dropdown kosong/tidak berfungsi). Sekarang diisi dari seluruh definisi
+      // form (sample + lokal) sehingga pengguna benar-benar bisa memilih form
+      // mana yang ingin diedit di Form Builder.
+      const allDefinitions = this.getAllFormDefinitions();
+      const isKnownForm = allDefinitions.some(
+        (def) => def.id === selectedForm.id,
+      );
+      const loadFormOptions =
+        (isKnownForm
+          ? ""
+          : `<option value="" selected>(Form baru - belum disimpan)</option>`) +
+        allDefinitions
+          .map(
+            (def) => `
+                <option value="${def.id}" ${def.id === selectedForm.id ? "selected" : ""}>
+                    ${this.escapeHtml(def.name || def.id)}
+                </option>
+            `,
+          )
+          .join("");
+
       controls.innerHTML = `
                 <div class="formgear-builder-toolbar">
-                    <div style="flex:1; min-width:260px;">
+                    <div style="flex:1; min-width:220px;">
+                        <label>Form yang Diedit</label>
+                        <select id="builder-load-form-selector" onchange="FormGearBuilderInstance.selectForm(this.value)">
+                            ${loadFormOptions}
+                        </select>
+                    </div>
+                    <div style="flex:1; min-width:220px;">
                         <label>Template Form</label>
                         <select id="builder-template-selector" onchange="FormGearBuilderInstance.updateBuilderMeta('templateId', this.value)">
                             ${templateOptions}
@@ -152,6 +181,7 @@
                     <button class="btn-success" onclick="FormGearBuilderInstance.addBuilderSection()"><i class="bi bi-folder-plus"></i> Tambah Section</button>
                     <button class="btn-success" onclick="FormGearBuilderInstance.saveBuilderDefinition()"><i class="bi bi-save"></i> Simpan Definisi</button>
                     <button class="btn-outline" onclick="FormGearBuilderInstance.generateBuilderJson()"><i class="bi bi-code-slash"></i> Generate JSON</button>
+                    <button class="btn-outline" onclick="uploadBuilderDefinitionToFirebase()"><i class="bi bi-cloud-upload"></i> Unggah Definisi</button>
                 </div>
                 <div class="formgear-builder-panel">
                     <div class="formgear-builder-row">
@@ -171,10 +201,6 @@
                         </div>
                     </div>
                     <div id="builder-sections">${this.renderBuilderSections(selectedForm)}</div>
-                </div>
-                <div class="formgear-builder-panel">
-                    <h4>JSON Output</h4>
-                    <pre id="builder-json-output" class="formgear-json-output"></pre>
                 </div>
             `;
 
@@ -624,11 +650,7 @@
   };
   window.exportBuilderJson = function () {
     window.FormGearBuilderInstance.generateBuilderJson();
-    const output = document.getElementById('builder-json-output');
-    if (output) {
-      output.focus();
-      output.select?.();
-    }
+    window.copyBuilderJson();
   };
   window.uploadBuilderDefinitionToFirebase = async function () {
     const instance = window.FormGearBuilderInstance;
@@ -681,13 +703,39 @@
   window.copyBuilderJson = function () {
     const output = document.getElementById('builder-json-output');
     if (!output) return;
-    output.select?.();
-    try {
-      document.execCommand('copy');
-      showAlert('JSON berhasil disalin.');
-    } catch (error) {
-      console.error(error);
-      showAlert('Gagal menyalin JSON.');
+    const text = output.textContent || '';
+    if (!text.trim()) {
+      showAlert('Belum ada JSON untuk disalin.');
+      return;
+    }
+
+    const fallbackCopy = () => {
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(output);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        const ok = document.execCommand('copy');
+        selection.removeAllRanges();
+        if (ok) {
+          showAlert('JSON berhasil disalin.');
+        } else {
+          showAlert('Gagal menyalin JSON.');
+        }
+      } catch (error) {
+        console.error(error);
+        showAlert('Gagal menyalin JSON.');
+      }
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => showAlert('JSON berhasil disalin.'),
+        () => fallbackCopy(),
+      );
+    } else {
+      fallbackCopy();
     }
   };
   window.selectBuilderTemplate = function (formId) {

@@ -1,5 +1,5 @@
 // ===============================
-// SAKA TRACKER - Service Worker v5.6.0  
+// SAKA TRACKER - Service Worker v5.7.0
 // ===============================
 // PENTING - SINKRONISASI VERSI (Semantic Versioning):
 // SW_VERSION di file ini HARUS selalu sama persis dengan APP_VERSION di
@@ -8,13 +8,18 @@
 // sehingga index.html dapat memverifikasi kecocokan versi secara otomatis
 // (lihat checkVersionSync() di index.html).
 
-const SW_VERSION = '5.6.0';
-const CACHE_NAME = 'saka-tracker-v5-6-0';
+const SW_VERSION = '5.7.0';
+const CACHE_NAME = 'saka-tracker-v5-7-0';
 const ASSETS = [
   './',
   './index.html',
+  './assets/formgear/formgear-v2.css',
+  './assets/formgear/firebase-manager.js',
+  './assets/formgear/form-builder.js',
+  './assets/formgear/demo-forms.js',
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff2'
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff2',
+  'https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js'
 ];
 
 // ===============================

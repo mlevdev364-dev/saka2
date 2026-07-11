@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title id="app-title">Saka Tracker V5.6.0 - Stable</title>
+    <title id="app-title">Saka Tracker V5.7.0 - Stable</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="assets/formgear/formgear-v2.css">
     <!-- PWA Meta Tags -->
@@ -1699,8 +1699,8 @@
                 Menginisialisasi Firebase...
             </div>
 
-            <!-- Form Selector -->
-<div style="margin: 12px 0 8px; display:grid; gap:12px;">
+            <!-- Form Selector (KATALOG) -->
+<div id="formgear-catalog-view" style="margin: 12px 0 8px; display:grid; gap:12px;">
                     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
                         <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Pilih Form:</span>
                         <button class="btn-success" onclick="switchPage('formbuilder')" style="padding: 10px 16px; border:none; border-radius: 8px; font-weight: 600; font-size: 0.85rem; white-space: nowrap; cursor:pointer; display:flex; align-items:center; gap:6px; justify-content:center;">
@@ -1710,8 +1710,13 @@
                     <div id="formgear-form-card-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;"></div>
             </div>
 
-            <!-- Form Container -->
-            <div id="formgear-container" style="margin-top: 16px; min-height: 400px;"></div>
+            <!-- Form Container: hanya tampil setelah salah satu kartu di atas diklik -->
+            <div id="formgear-form-view" style="display:none; margin-top: 16px;">
+                <button class="btn-outline" onclick="closeFormGearForm()" style="margin-bottom: 12px;">
+                    <i class="bi bi-arrow-left"></i> Kembali ke Katalog
+                </button>
+                <div id="formgear-container" style="min-height: 400px;"></div>
+            </div>
 
             <!-- Submitted Forms Gallery -->
             <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
@@ -1751,58 +1756,47 @@
     </div>
 
     <!-- FORM BUILDER PAGE -->
-    <div id="page-formbuilder" class="page container">
+    <div id="page-formbuilder" class="page container formgear-builder-page">
         <div class="header">
             <h1><i class="bi bi-hammer"></i> FORM BUILDER</h1>
             <p>Rancang form dinamis nested, pratinjau, ekspor JSON, simpan lokal, dan unggah ke Firebase.</p>
         </div>
 
-        <div class="form-section">
-            <div style="display: grid; gap: 16px;">
-                <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;">
-                    <select id="builder-template-selector" onchange="selectBuilderTemplate(this.value)"
-                        style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:#0f172a; color:var(--text-main);">
-                    </select>
-                    <button class="btn-outline" onclick="createNewBuilderForm()"><i class="bi bi-file-earmark-plus"></i> Baru</button>
-                    <button class="btn-success" onclick="saveBuilderForm()"><i class="bi bi-save"></i> Simpan</button>
-                </div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 4px;">
+            <button class="btn-outline" onclick="createNewBuilderForm()"><i class="bi bi-file-earmark-plus"></i> Form Baru</button>
+        </div>
 
-                <div style="display: grid; gap: 12px;">
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <input type="text" id="builder-form-name" placeholder="Nama Form" onchange="updateBuilderMeta('name', this.value)" style="padding: 12px 14px; border-radius: 12px; border:1px solid var(--border); background:#0f172a; color:var(--text-main);">
-                        <input type="text" id="builder-form-category" placeholder="Kategori" onchange="updateBuilderMeta('category', this.value)" style="padding: 12px 14px; border-radius: 12px; border:1px solid var(--border); background:#0f172a; color:var(--text-main);">
+        <!-- Layout 2 kolom otomatis di desktop/tablet (lihat formgear-v2.css):
+             kanan = pembuatan form (card 1, fokus utama), kiri = pratinjau &
+             JSON output (card 2 & 3). Di mobile semua ditumpuk 1 kolom. -->
+        <div class="formgear-builder-layout">
+            <div class="formgear-builder-primary">
+                <div class="form-section">
+                    <div id="form-builder-controls"></div>
+                </div>
+            </div>
+
+            <div class="formgear-builder-secondary">
+                <div class="form-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h4 style="margin:0; font-size:0.95rem; font-weight:600;">Pratinjau Form</h4>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">Klik tombol simpan sebelum submit.</div>
                     </div>
-                    <textarea id="builder-form-description" rows="2" placeholder="Deskripsi singkat form" onchange="updateBuilderMeta('description', this.value)" style="width:100%; padding: 12px 14px; border-radius: 12px; border:1px solid var(--border); background:#0f172a; color:var(--text-main);"></textarea>
+                    <div id="form-builder-preview" style="min-height:240px; background:#0f172a; border:1px solid var(--border); border-radius:14px; padding:16px;"></div>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-top:12px;">
+                        <button class="btn-success" onclick="submitBuilderPreview()"><i class="bi bi-send-check"></i> Simpan Data Lokal</button>
+                        <button class="btn-outline" onclick="uploadPreviewSubmissionToFirebase()"><i class="bi bi-cloud-upload"></i> Unggah Data Preview</button>
+                    </div>
                 </div>
 
-                <div id="builder-control-panel"></div>
-
-                <div style="display:flex; flex-wrap:wrap; gap:10px;">
-                    <button class="btn-outline" onclick="addBuilderSection()"><i class="bi bi-layout-text-sidebar-reverse"></i> Tambah Bagian</button>
-                    <button class="btn-outline" onclick="exportBuilderJson()"><i class="bi bi-code-slash"></i> Ekspor JSON</button>
-                    <button class="btn-outline" onclick="uploadBuilderDefinitionToFirebase()"><i class="bi bi-cloud-upload"></i> Unggah Definisi</button>
+                <div class="form-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h4 style="margin:0; font-size:0.95rem; font-weight:600;">JSON Form Definition</h4>
+                        <button class="btn-outline" onclick="copyBuilderJson()"><i class="bi bi-clipboard"></i> Salin JSON</button>
+                    </div>
+                    <pre id="builder-json-output" class="formgear-json-output"></pre>
                 </div>
             </div>
-        </div>
-
-        <div class="form-section">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h4 style="margin:0; font-size:0.95rem; font-weight:600;">Pratinjau Form</h4>
-                <div style="font-size:0.75rem; color:var(--text-muted);">Klik tombol simpan sebelum submit.</div>
-            </div>
-            <div id="builder-preview" style="min-height:240px; background:#0f172a; border:1px solid var(--border); border-radius:14px; padding:16px;"></div>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-top:12px;">
-                <button class="btn-success" onclick="submitBuilderPreview()"><i class="bi bi-send-check"></i> Simpan Data Lokal</button>
-                <button class="btn-outline" onclick="uploadPreviewSubmissionToFirebase()"><i class="bi bi-cloud-upload"></i> Unggah Data Preview</button>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h4 style="margin:0; font-size:0.95rem; font-weight:600;">JSON Form Definition</h4>
-                <button class="btn-outline" onclick="copyBuilderJson()"><i class="bi bi-clipboard"></i> Salin JSON</button>
-            </div>
-            <textarea id="builder-json-output" readonly style="width:100%; min-height:260px; background:#020617; color:#dbeafe; border:1px solid var(--border); border-radius:14px; padding:14px; font-family: monospace; font-size:0.8rem;"></textarea>
         </div>
     </div>
 
@@ -1884,6 +1878,12 @@
                     dengan tracking termin dan komparasi muatan kontrak.</div>
                 <div
                     style="margin-bottom: 8px; font-size: 0.68rem; color: var(--text-muted); background:#0b1120; border:1px solid var(--border); border-radius:8px; padding:6px 8px; text-align:left;">
+                    <strong style="color:var(--text-main); font-size:0.7rem;"><i class="bi bi-clock-history"></i>
+                        v5.7.0</strong> — Perbaikan bug FormGear: Form Builder yang sebelumnya tidak bisa dipakai
+                    sama sekali (ID kontainer tidak cocok), upload ke Firebase yang selalu gagal, listener Firebase
+                    yang menumpuk, dan inisialisasi ganda saat membuka tab FormGear. Tab FormGear kini menampilkan
+                    katalog form saja; form penuh baru tampil setelah kartu diklik. Halaman Form Builder kini
+                    memakai layout 2 kolom penuh layar di desktop/tablet.<br>
                     <strong style="color:var(--text-main); font-size:0.7rem;"><i class="bi bi-clock-history"></i>
                         v5.6.0</strong> — Integrasi FormGear lokal di folder assets, perbaikan render form dinamis, dan pembaruan semver aplikasi
                     Semantic Versioning terpadu, dan sinkronisasi versi otomatis antara halaman, Service Worker, dan
@@ -2038,8 +2038,8 @@
         //   - README.md   -> badge/judul versi
         // Ketidaksesuaian antar file akan terdeteksi otomatis saat runtime dan
         // dicatat sebagai console.warn (lihat checkVersionSync & checkManifestVersionSync).
-        const APP_VERSION = "5.6.0";
-        const BUILD_DATE = "20260710";
+        const APP_VERSION = "5.7.0";
+        const BUILD_DATE = "20260711";
         const LEGAL_VERSION = "5.6.0"; // versi dokumen ToS/Privacy - naik hanya saat isi legal berubah
         const STORAGE_KEY = "saka_tracker_v5_4"; // kunci localStorage historis, tidak diubah agar data pengguna lama tetap kompatibel
 
@@ -3414,7 +3414,11 @@
                 renderHistory();
                 updatePinSecurityUI();
                 checkConsentGate();
-                if (window.initFormGearDemo) window.initFormGearDemo();
+                // CATATAN PERBAIKAN BUG: baris "initFormGearDemo()" di sini sebelumnya
+                // membuat FormGear diinisialisasi otomatis setiap kali aplikasi dibuka
+                // (walau tab aktif adalah Dashboard), lalu diinisialisasi ULANG saat
+                // tab FormGear benar-benar diklik (lihat switchPage()). Sekarang
+                // FormGear hanya diinisialisasi sekali, saat tabnya benar-benar dibuka.
             }, 100);
         });
     </script>
@@ -3432,13 +3436,33 @@
          */
 
         let currentFormGearForm = 'demo-kegiatan';
-        let formGearFirebaseManager = null;
+        // BUGFIX: harus di-attach ke `window` secara eksplisit. `form-builder.js`
+        // (file terpisah) membaca `window.formGearFirebaseManager` — sebelumnya
+        // variabel ini dideklarasikan dengan `let` di scope script sehingga TIDAK
+        // pernah muncul di `window`, membuat semua fitur upload Firebase di Form
+        // Builder (Simpan Definisi ke Firebase, Unggah Data Preview) selalu gagal
+        // dengan pesan "Firebase belum siap" walau koneksi sebenarnya sukses.
+        window.formGearFirebaseManager = null;
+        let formGearBootstrapped = false;
 
         // Handle form selection change
         function handleFormChange(formId) {
             currentFormGearForm = formId;
             renderFormGear(formId);
             renderFormSelectorCards();
+        }
+
+        // Tampilkan panel form penuh & sembunyikan panel katalog
+        function openFormGearForm() {
+            const formView = document.getElementById('formgear-form-view');
+            if (formView) formView.style.display = 'block';
+            if (formView) formView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Kembali ke tampilan katalog (dipanggil oleh tombol "Kembali ke Katalog")
+        function closeFormGearForm() {
+            const formView = document.getElementById('formgear-form-view');
+            if (formView) formView.style.display = 'none';
         }
 
         function renderFormSelectorCards() {
@@ -3474,6 +3498,7 @@
             if (!container) return;
 
             window.FormGearBuilderInstance.renderForm(formId, 'formgear-container');
+            openFormGearForm();
             loadSubmittedForms();
         }
 
@@ -3555,7 +3580,7 @@
 
         // Upload single form ke Firebase
         async function uploadSingleForm(idx) {
-            if (!formGearFirebaseManager || !formGearFirebaseManager.initialized) {
+            if (!window.formGearFirebaseManager || !window.formGearFirebaseManager.initialized) {
                 showAlert('Firebase belum siap. Coba lagi dalam beberapa detik.');
                 return;
             }
@@ -3567,7 +3592,7 @@
             if (!formData) return;
 
             try {
-                const result = await formGearFirebaseManager.uploadFormData(
+                const result = await window.formGearFirebaseManager.uploadFormData(
                     formData.formId,
                     formData.data
                 );
@@ -3604,7 +3629,7 @@
 
         // Sinkronkan semua form lokal ke Firebase
         async function syncFormToFirebase() {
-            if (!formGearFirebaseManager || !formGearFirebaseManager.initialized) {
+            if (!window.formGearFirebaseManager || !window.formGearFirebaseManager.initialized) {
                 alert('Firebase belum siap. Coba lagi dalam beberapa detik.');
                 return;
             }
@@ -3624,7 +3649,7 @@
                 let successCount = 0;
                 for (const formData of savedForms) {
                     try {
-                        await formGearFirebaseManager.uploadFormData(
+                        await window.formGearFirebaseManager.uploadFormData(
                             formData.formId,
                             formData.data
                         );
@@ -3647,10 +3672,10 @@
 
         // Update Firebase submission count
         async function updateFirebaseSubmissionCount() {
-            if (!formGearFirebaseManager || !formGearFirebaseManager.initialized) return;
+            if (!window.formGearFirebaseManager || !window.formGearFirebaseManager.initialized) return;
 
             try {
-                const submissions = await formGearFirebaseManager.getFormSubmissions(currentFormGearForm);
+                const submissions = await window.formGearFirebaseManager.getFormSubmissions(currentFormGearForm);
                 document.getElementById('firebase-submissions-count').textContent = submissions.length;
             } catch (error) {
                 console.error('Error fetching Firebase submissions:', error);
@@ -3662,7 +3687,7 @@
             const statusEl = document.getElementById('firebase-status');
             if (!statusEl) return;
 
-            if (formGearFirebaseManager && formGearFirebaseManager.initialized) {
+            if (window.formGearFirebaseManager && window.formGearFirebaseManager.initialized) {
                 statusEl.innerHTML = `
                     <span class="status-dot active"></span> 
                     Firebase Connected - Project: formgear
@@ -3679,24 +3704,31 @@
         // Initialize FormGear v2
         function initializeFormGearV2() {
             // Inisialisasi Firebase Manager
-            formGearFirebaseManager = new FormGearFirebaseManager();
-            
-            // Tunggu Firebase siap
+            if (!window.formGearFirebaseManager) {
+                window.formGearFirebaseManager = new FormGearFirebaseManager();
+            }
+
+            // Tunggu Firebase siap (dengan timeout agar interval tidak jalan selamanya
+            // jika Firebase SDK gagal dimuat, mis. saat offline)
+            let firebaseWaitElapsed = 0;
             const checkFirebase = setInterval(() => {
-                if (formGearFirebaseManager.initialized) {
+                firebaseWaitElapsed += 500;
+                if (window.formGearFirebaseManager.initialized) {
                     clearInterval(checkFirebase);
                     updateFirebaseStatus();
                     updateFirebaseSubmissionCount();
+                } else if (firebaseWaitElapsed >= 8000) {
+                    clearInterval(checkFirebase);
+                    updateFirebaseStatus();
                 }
             }, 500);
 
-            // Render form awal
-            setTimeout(() => {
-                currentFormGearForm = 'demo-kegiatan';
-                renderFormSelectorCards();
-                renderFormGear(currentFormGearForm);
-                loadFormDefinitions(); // Load form definitions from Firebase
-            }, 100);
+            // Render katalog form. Form penuh baru ditampilkan setelah salah satu
+            // kartu di klik (lihat handleFormChange) — bukan otomatis saat halaman
+            // dibuka, sesuai perilaku "tampilan katalog" yang diharapkan.
+            renderFormSelectorCards();
+            loadFormDefinitions(); // Load form definitions from Firebase
+            loadSubmittedForms();
         }
 
         // Load and display form definitions as cards
@@ -3770,7 +3802,14 @@
             try {
                 if (window.firebase && firebase.database) {
                     const formGearDb = firebase.database();
-                    formGearDb.ref('forms').on('value', (snapshot) => {
+                    // BUGFIX: sebelumnya pakai .on('value', ...) yang mendaftarkan
+                    // listener realtime BARU setiap kali loadFormDefinitions()
+                    // dipanggil (setiap buka tab FormGear, setiap simpan definisi,
+                    // dst) tanpa pernah dilepas — listener menumpuk sehingga galeri
+                    // bisa ter-render berkali-kali dan lambat-laun membebani
+                    // memori/koneksi. .once('value') cukup untuk galeri ini karena
+                    // dipanggil ulang secara eksplisit tiap ada perubahan data.
+                    formGearDb.ref('forms').once('value').then((snapshot) => {
                         const remoteForms = [];
                         if (snapshot.exists()) {
                             const data = snapshot.val();
@@ -3779,6 +3818,9 @@
                             });
                         }
                         renderLocalAndRemote(remoteForms);
+                    }).catch((error) => {
+                        console.error('Error loading Firebase form definitions:', error);
+                        renderLocalAndRemote([]);
                     });
                 } else {
                     renderLocalAndRemote([]);
@@ -3810,13 +3852,12 @@
             }
         }
 
-        // Event listener saat FormGear page aktif
-        window.addEventListener('DOMContentLoaded', () => {
-            // Inisialisasi FormGear saat page load
-            setTimeout(() => {
-                initializeFormGearV2();
-            }, 500);
-        });
+        // CATATAN PERBAIKAN BUG: sebelumnya FormGear diinisialisasi otomatis di sini
+        // (DOMContentLoaded) SEKALIGUS lagi setiap kali tab FormGear diklik lewat
+        // switchPage() -> initFormGearDemo(). Dua inisialisasi ini membuat
+        // FormGearFirebaseManager dan listener Firebase dibuat berulang kali tanpa
+        // pernah dibersihkan. FormGear kini hanya diinisialisasi sesuai kebutuhan,
+        // yaitu saat tab FormGear benar-benar dibuka (lihat switchPage()).
 
         // Update Firebase status setiap 5 detik
         setInterval(updateFirebaseStatus, 5000);

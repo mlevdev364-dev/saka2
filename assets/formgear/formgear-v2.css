@@ -168,6 +168,55 @@
   gap: 12px;
 }
 
+/* ===========================================================
+   FORM BUILDER - LAYOUT RESPONSIF
+   Mobile: 1 kolom, ditumpuk (Form Building > Preview > JSON).
+   Desktop/Tablet (>= 900px): 2 kolom penuh layar -- kanan
+   fokus ke pembuatan form (card 1), kiri berisi Preview & JSON
+   (card 2 & 3).
+   =========================================================== */
+.formgear-builder-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.formgear-builder-primary,
+.formgear-builder-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .formgear-builder-page.container {
+    max-width: 1360px;
+  }
+
+  .formgear-builder-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) minmax(420px, 1.5fr);
+    align-items: start;
+    gap: 20px;
+  }
+
+  /* Kiri: Preview (card 2) + JSON Output (card 3) */
+  .formgear-builder-secondary {
+    order: 1;
+  }
+
+  /* Kanan: pembuatan form (card 1) -- fokus utama, lebih lebar, sticky
+     supaya tetap terlihat saat men-scroll daftar section/field yang panjang */
+  .formgear-builder-primary {
+    order: 2;
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+  }
+}
+
 .formgear-form-card {
   background: #0f172a;
   border: 1px solid var(--border);

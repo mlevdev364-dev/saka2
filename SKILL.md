@@ -1,7 +1,7 @@
 # SAKA TRACKER — Technical Specification (SKILL.md)
   
 **App:** Saka Tracker — SE2026 SLS Progress Monitoring
-**Version documented:** v5.6.0 (Build 20260710)
+**Version documented:** v5.7.0 (Build 20260711)
 **Type:** Single-file client-side web app (HTML+CSS+JS, no backend, no build step) with a companion `manifest.json` + `sw.js` for PWA install/offline support
 **Storage:** Browser `localStorage`, key `saka_tracker_v5_4` (referenced via the `STORAGE_KEY` constant since v5.5.0; the literal key itself is unchanged for backward compatibility)
 **Author role documented for:** Saka_Omni (internal field-ops tooling)
