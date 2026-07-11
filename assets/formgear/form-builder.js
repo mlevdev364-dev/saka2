@@ -603,6 +603,90 @@
     window.FormGearBuilderInstance.initFormGear();
     window.FormGearBuilderInstance.renderBuilderPage();
   };
+  window.initFormBuilder = window.initFormBuilderPage;
+  window.createNewBuilderForm = function () {
+    const instance = window.FormGearBuilderInstance;
+    instance.currentForm = {
+      id: 'form-' + Date.now(),
+      name: '',
+      category: '',
+      description: '',
+      createdAt: Date.now(),
+      sections: [instance.createNewSection()],
+    };
+    instance.renderBuilderPage();
+  };
+  window.saveBuilderForm = function () {
+    window.FormGearBuilderInstance.saveBuilderDefinition();
+  };
+  window.exportBuilderJson = function () {
+    window.FormGearBuilderInstance.generateBuilderJson();
+    const output = document.getElementById('builder-json-output');
+    if (output) {
+      output.focus();
+      output.select?.();
+    }
+  };
+  window.uploadBuilderDefinitionToFirebase = async function () {
+    const instance = window.FormGearBuilderInstance;
+    if (!window.formGearFirebaseManager || !window.formGearFirebaseManager.initialized) {
+      showAlert('Firebase belum siap. Coba lagi dalam beberapa detik.');
+      return;
+    }
+    if (!instance.currentForm) {
+      showAlert('Tidak ada form builder yang dipilih.');
+      return;
+    }
+    try {
+      await window.formGearFirebaseManager.saveFormDefinition(instance.currentForm);
+      showAlert('Definisi form berhasil diunggah ke Firebase.');
+    } catch (error) {
+      console.error(error);
+      showAlert('Gagal mengunggah definisi: ' + error.message);
+    }
+  };
+  window.submitBuilderPreview = function () {
+    const instance = window.FormGearBuilderInstance;
+    if (!instance.currentForm || !instance.currentForm.id) {
+      showAlert('Tidak ada form preview yang dapat disimpan.');
+      return;
+    }
+    instance.submitRenderedForm(instance.currentForm.id);
+  };
+  window.uploadPreviewSubmissionToFirebase = async function () {
+    const instance = window.FormGearBuilderInstance;
+    if (!window.formGearFirebaseManager || !window.formGearFirebaseManager.initialized) {
+      showAlert('Firebase belum siap. Coba lagi dalam beberapa detik.');
+      return;
+    }
+    if (!instance.currentForm || !instance.currentForm.id) {
+      showAlert('Tidak ada form preview yang dapat diunggah.');
+      return;
+    }
+
+    const submission = instance.submitRenderedForm(instance.currentForm.id);
+    if (!submission) return;
+
+    try {
+      await window.formGearFirebaseManager.uploadFormData(instance.currentForm.id, submission);
+      showAlert('Data preview berhasil diunggah ke Firebase.');
+    } catch (error) {
+      console.error(error);
+      showAlert('Gagal mengunggah preview: ' + error.message);
+    }
+  };
+  window.copyBuilderJson = function () {
+    const output = document.getElementById('builder-json-output');
+    if (!output) return;
+    output.select?.();
+    try {
+      document.execCommand('copy');
+      showAlert('JSON berhasil disalin.');
+    } catch (error) {
+      console.error(error);
+      showAlert('Gagal menyalin JSON.');
+    }
+  };
   window.selectBuilderTemplate = function (formId) {
     window.FormGearBuilderInstance.selectForm(formId);
   };

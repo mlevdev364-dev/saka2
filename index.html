@@ -1700,16 +1700,14 @@
             </div>
 
             <!-- Form Selector -->
-            <div style="margin: 12px 0 8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Pilih Form:</label>
-                <select id="formgear-form-selector" onchange="handleFormChange(this.value)" style="flex:1; min-width:220px; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#0f172a; color:var(--text-main); font-size: 0.85rem;">
-                    <option value="demo-kegiatan">📋 Form Kegiatan Survey</option>
-                    <option value="demo-pelaporan">📊 Form Pelaporan Harian</option>
-                    <option value="demo-feedback">💬 Form Feedback Lapangan</option>
-                </select>
-                <button class="btn-success" onclick="switchPage('formbuilder')" style="padding: 10px 16px; border:none; border-radius: 8px; font-weight: 600; font-size: 0.85rem; white-space: nowrap; cursor:pointer; display:flex; align-items:center; gap:6px; justify-content:center;">
-                    <i class="bi bi-hammer" style="margin-right: 4px;"></i> Buka Form Builder
-                </button>
+<div style="margin: 12px 0 8px; display:grid; gap:12px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                        <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Pilih Form:</span>
+                        <button class="btn-success" onclick="switchPage('formbuilder')" style="padding: 10px 16px; border:none; border-radius: 8px; font-weight: 600; font-size: 0.85rem; white-space: nowrap; cursor:pointer; display:flex; align-items:center; gap:6px; justify-content:center;">
+                            <i class="bi bi-hammer" style="margin-right: 4px;"></i> Buka Form Builder
+                        </button>
+                    </div>
+                    <div id="formgear-form-card-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;"></div>
             </div>
 
             <!-- Form Container -->
@@ -3438,6 +3436,34 @@
         function handleFormChange(formId) {
             currentFormGearForm = formId;
             renderFormGear(formId);
+            renderFormSelectorCards();
+        }
+
+        function renderFormSelectorCards() {
+            const cardList = document.getElementById('formgear-form-card-list');
+            if (!cardList) return;
+
+            const forms = Array.isArray(window.FormGearSampleForms)
+                ? window.FormGearSampleForms
+                : [];
+
+            cardList.innerHTML = forms
+                .map((form) => {
+                    const isActive = form.id === currentFormGearForm;
+                    return `
+                        <div style="background: #0f172a; border: 1px solid ${isActive ? 'rgba(59,130,246,0.95)' : 'rgba(148,163,184,0.12)'}; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; min-height: 180px; transition: border-color 0.2s ease, transform 0.2s ease;">
+                            <div>
+                                <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">${form.name}</div>
+                                <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; min-height: 56px;">${form.description || ''}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 16px;">
+                                <span style="font-size: 0.78rem; color: var(--text-muted);">${form.category || 'Template'}</span>
+                                <button onclick="handleFormChange('${form.id}')" style="padding: 10px 14px; background: ${isActive ? 'var(--accent-purple)' : 'var(--accent-blue)'}; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 0.82rem;">${isActive ? 'Dipilih' : 'Pilih'}</button>
+                            </div>
+                        </div>
+                    `;
+                })
+                .join('');
         }
 
         // Render form ke container
@@ -3664,7 +3690,9 @@
 
             // Render form awal
             setTimeout(() => {
-                renderFormGear('demo-kegiatan');
+                currentFormGearForm = 'demo-kegiatan';
+                renderFormSelectorCards();
+                renderFormGear(currentFormGearForm);
                 loadFormDefinitions(); // Load form definitions from Firebase
             }, 100);
         }
