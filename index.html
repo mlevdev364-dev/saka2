@@ -2042,7 +2042,7 @@
         // dicatat sebagai console.warn (lihat checkVersionSync & checkManifestVersionSync).
         const APP_VERSION = "5.6.0";
         const BUILD_DATE = "20260710";
-        const LEGAL_VERSION = "5.4.5"; // versi dokumen ToS/Privacy - naik hanya saat isi legal berubah
+        const LEGAL_VERSION = "5.6.0"; // versi dokumen ToS/Privacy - naik hanya saat isi legal berubah
         const STORAGE_KEY = "saka_tracker_v5_4"; // kunci localStorage historis, tidak diubah agar data pengguna lama tetap kompatibel
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -3017,7 +3017,7 @@
             if (type === 'tos') {
                 title.innerHTML = '<i class="bi bi-shield-check"></i> Terms of Service';
                 body.innerHTML = `
-            <span class="legal-updated">Terakhir diperbarui: 8 Juli 2026 &middot; Versi 5.4.5</span>
+            <span class="legal-updated">Terakhir diperbarui: 8 Juli 2026 &middot; Versi 5.6.0</span>
             <div class="legal-note"><i class="bi bi-info-circle-fill"></i> Saka Tracker adalah <strong>alat bantu internal</strong> untuk monitoring progres lapangan Sensus Ekonomi 2026 (SE2026). Aplikasi ini <strong>bukan produk resmi BPS</strong>.</div>
             <h4><i class="bi bi-1-circle-fill"></i> Penerimaan Ketentuan</h4>
             <p>Dengan mengakses dan menggunakan Saka Tracker, Anda menyatakan telah membaca, memahami, dan menyetujui seluruh ketentuan dalam dokumen ini.</p>
@@ -3041,7 +3041,7 @@
             } else if (type === 'privacy') {
                 title.innerHTML = '<i class="bi bi-lock-fill"></i> Privacy Policy';
                 body.innerHTML = `
-            <span class="legal-updated">Terakhir diperbarui: 8 Juli 2026 &middot; Versi 5.4.5</span>
+            <span class="legal-updated">Terakhir diperbarui: 8 Juli 2026 &middot; Versi 5.6.0</span>
             <div class="legal-note"><i class="bi bi-hdd-fill"></i> Saka Tracker bersifat <strong>local-first</strong>: tidak ada server backend yang menyimpan data Anda.</div>
             <h4><i class="bi bi-1-circle-fill"></i> Data yang Diproses</h4>
             <p>Aplikasi menyimpan data berikut secara lokal di localStorage:</p>
@@ -3691,24 +3691,36 @@
                     const fieldCount = form.sections?.reduce((count, s) => count + (s.fields?.length || 0), 0) || 0;
                     const createdDate = new Date(form.createdAt || Date.now()).toLocaleDateString('id-ID');
                     const sourceLabel = form.source === 'local' ? 'Lokal' : 'Firebase';
+                    const fieldLabel = fieldCount === 1 ? 'field' : 'fields';
 
                     return `
-                        <div style="background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: all 0.3s;">
-                            <div style="font-weight: 600; color: var(--text-main); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: start; gap:10px; flex-wrap:wrap;">
-                                <span style="flex: 1; word-break: break-word;">${form.name || 'Unnamed Form'}</span>
-                                <span style="background: var(--accent-blue); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap;">${fieldCount} field</span>
+                        <div style="background: #0f172a; border: 1px solid rgba(148,163,184,0.12); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 18px; min-height: 260px; box-shadow: 0 16px 30px rgba(0,0,0,0.10); transition: transform 0.25s ease, border-color 0.25s ease;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; justify-content: space-between;">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-size: 1rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px; word-break: break-word;">${form.name || 'Unnamed Form'}</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">${form.description || 'Tidak ada deskripsi.'}</div>
+                                </div>
+                                <span style="background: rgba(59,130,246,0.14); color: var(--accent-blue); padding: 6px 12px; border-radius: 999px; font-size: 0.78rem; white-space: nowrap;">${sourceLabel}</span>
                             </div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">${form.description || '-'}</div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px; display: flex; gap: 16px; flex-wrap:wrap;">
-                                <span>📅 ${createdDate}</span>
-                                <span>📂 ${form.category || 'Uncategorized'}</span>
-                                <span>${sourceLabel}</span>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px;">
+                                <div style="background: rgba(148,163,184,0.08); padding: 14px; border-radius: 14px;">
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Fields</div>
+                                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);">${fieldCount} ${fieldLabel}</div>
+                                </div>
+                                <div style="background: rgba(148,163,184,0.08); padding: 14px; border-radius: 14px;">
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Kategori</div>
+                                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);">${form.category || 'Uncategorized'}</div>
+                                </div>
+                                <div style="background: rgba(148,163,184,0.08); padding: 14px; border-radius: 14px;">
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Dibuat</div>
+                                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);">${createdDate}</div>
+                                </div>
                             </div>
-                            <div style="display: flex; gap: 8px; flex-wrap:wrap;">
-                                <button onclick="switchPage('formbuilder'); setTimeout(() => selectBuilderTemplate('${form.id}'), 100);" style="flex: 1; min-width: 120px; padding: 8px; background: var(--accent-blue); color: white; border: none; border-radius: 6px; text-align: center; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='var(--accent-purple)'" onmouseout="this.style.background='var(--accent-blue)'>
+                            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end;">
+                                <button onclick="switchPage('formbuilder'); setTimeout(() => selectBuilderTemplate('${form.id}'), 100);" style="flex: 1 1 140px; min-width: 120px; padding: 12px 14px; background: var(--accent-blue); color: white; border: none; border-radius: 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: transform 0.25s ease, background 0.25s ease;" onmouseover="this.style.background='var(--accent-purple)'" onmouseout="this.style.background='var(--accent-blue)'">
                                     ✏️ Edit
                                 </button>
-                                <button onclick="deleteFormDefinition('${form.id}')" style="flex: 1; min-width: 120px; padding: 8px; background: #c53030; color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='#9b2c2c'" onmouseout="this.style.background='#c53030'">
+                                <button onclick="deleteFormDefinition('${form.id}')" style="flex: 1 1 140px; min-width: 120px; padding: 12px 14px; background: #c53030; color: white; border: none; border-radius: 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: transform 0.25s ease, background 0.25s ease;" onmouseover="this.style.background='#9b2c2c'" onmouseout="this.style.background='#c53030'">
                                     🗑️ Hapus
                                 </button>
                             </div>
@@ -3746,67 +3758,7 @@
                 renderLocalAndRemote([]);
             }
         }
-                try {
-                    const formGearDb = firebase.database();
-                    formGearDb.ref('forms').on('value', (snapshot) => {
-                        const gallery = document.getElementById('form-definitions-gallery');
-                        if (!gallery) return;
 
-                        const forms = [];
-                        if (snapshot.exists()) {
-                            const data = snapshot.val();
-                            Object.keys(data).forEach(formId => {
-                                forms.push({
-                                    id: formId,
-                                    ...data[formId]
-                                });
-                            });
-                        }
-
-                        // Render form cards
-                        if (forms.length === 0) {
-                            gallery.innerHTML = `
-                                <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 30px;">
-                                    <i class="bi bi-inbox" style="font-size: 2rem; display: block; margin-bottom: 10px;"></i>
-                                    <p>Belum ada form. <a href="./form-builder-app.html" style="color: var(--accent-blue); text-decoration: none;">Buat form baru di Form Builder</a></p>
-                                </div>
-                            `;
-                            return;
-                        }
-
-                        gallery.innerHTML = forms.map(form => {
-                            const fieldCount = form.sections?.reduce((count, s) => count + (s.fields?.length || 0), 0) || 0;
-                            const createdDate = new Date(form.createdAt || Date.now()).toLocaleDateString('id-ID');
-                            
-                            return `
-                                <div style="background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: all 0.3s;">
-                                    <div style="font-weight: 600; color: var(--text-main); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: start;">
-                                        <span style="flex: 1; word-break: break-word;">${form.name || 'Unnamed Form'}</span>
-                                        <span style="background: var(--accent-blue); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap; margin-left: 8px;">${fieldCount} field</span>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">${form.description || '-'}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px; display: flex; gap: 16px;">
-                                        <span>📅 ${createdDate}</span>
-                                        <span>📂 ${form.category || 'Uncategorized'}</span>
-                                    </div>
-                                    <div style="display: flex; gap: 8px;">
-                                        <a href="./form-builder-app.html" style="flex: 1; padding: 8px; background: var(--accent-blue); color: white; text-decoration: none; border-radius: 6px; text-align: center; font-size: 0.75rem; font-weight: 600; transition: background 0.3s;" onmouseover="this.style.background='var(--accent-purple)'" onmouseout="this.style.background='var(--accent-blue)'">
-                                            ✏️ Edit
-                                        </a>
-                                        <button onclick="deleteFormDefinition('${form.id}')" style="flex: 1; padding: 8px; background: #c53030; color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='#9b2c2c'" onmouseout="this.style.background='#c53030'">
-                                            🗑️ Hapus
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('');
-                    });
-                    window.formDefinitionsLoaded = true;
-                } catch (error) {
-                    console.error('Error loading form definitions:', error);
-                }
-            }
-        }
 
         // Delete form definition
         function deleteFormDefinition(formId) {
