@@ -4,7 +4,7 @@
  
 **Monitoring progres lapangan SLS, real-time, offline-ready.**
 
-![Version](https://img.shields.io/badge/version-5.7.0-3b82f6?style=flat-square)
+![Version](https://img.shields.io/badge/version-5.8.0-3b82f6?style=flat-square)
 ![Status](https://img.shields.io/badge/status-stable-10b981?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-installable-10b981?style=flat-square)
 ![Build Step](https://img.shields.io/badge/build_step-none-f59e0b?style=flat-square)
@@ -143,6 +143,16 @@ Karena proyek ini sengaja tanpa build step, sinkronisasi antar berkas dilakukan 
 
 `LEGAL_VERSION` (versi dokumen ToS/Privacy) sengaja independen dari `APP_VERSION` — hanya dinaikkan saat teks legal berubah, agar Consent Gate hanya muncul ulang saat benar-benar relevan. Lihat §12 pada `SKILL.md` untuk detail kontrak versioning ini.
 
+**FormGear (`assets/formgear/`) punya lapisan versioning sendiri, terpisah dari `APP_VERSION` maupun dari versi masing-masing form:**
+
+| Versi | Level | Naik saat |
+|---|---|---|
+| `FORMGEAR_ENGINE_VERSION` | Engine/templating (`form-builder.js` itu sendiri) | Kode engine berubah |
+| `schemaVersion` | Bentuk data form definition | Skema `{sections, fields, ...}` berubah tak-kompatibel |
+| `templateVersion` (per-form) | Satu form/template hasil buatan pengguna | Otomatis naik PATCH setiap kali form itu disimpan ulang |
+
+Ketiganya sengaja **tidak** disinkronkan otomatis dengan `APP_VERSION` — sebuah rilis Saka Tracker bisa saja tidak menyentuh FormGear sama sekali, dan sebaliknya. Detail lengkap ada di §15.5 pada `SKILL.md`.
+
 ## Standar Ikon
 
 Seluruh indikator visual dalam aplikasi menggunakan [Bootstrap Icons](https://icons.getbootstrap.com/) (`<i class="bi bi-...">`) — tidak ada emoji/emoticon di manapun, termasuk pada log console dan halaman offline fallback. Satu-satunya pengecualian adalah dialog native `alert()`/`confirm()`, yang secara teknis tidak dapat merender HTML/ikon sehingga menggunakan teks polos.
@@ -158,6 +168,7 @@ Seluruh indikator visual dalam aplikasi menggunakan [Bootstrap Icons](https://ic
 
 | Versi | Ringkasan |
 |---|---|
+| 5.8.0 | FormGear kini punya versioning semVer sendiri, terpisah dari `APP_VERSION` Saka Tracker dan dari versi masing-masing form: `FORMGEAR_ENGINE_VERSION` (versi engine), `schemaVersion` (versi bentuk-data), dan `templateVersion` per-form (naik PATCH otomatis tiap disimpan ulang). Form lama otomatis dimigrasi saat dimuat. Badge versi ditampilkan di toolbar Form Builder dan di kartu katalog form. |
 | 5.7.0 | Perbaikan bug FormGear: Form Builder yang tidak bisa dipakai sama sekali (ID kontainer salah), Firebase manager yang tidak ter-attach ke `window` (upload selalu gagal), listener Firebase yang menumpuk, dan inisialisasi ganda saat membuka tab FormGear. Tab FormGear kini menampilkan katalog form saja, form penuh tampil setelah kartu diklik. Form Builder kini 2 kolom penuh layar di desktop/tablet. |
 | 5.6.0 | Integrasi FormGear lokal di folder assets, perbaikan render form dinamis, dan pembaruan semver aplikasi lintas halaman, service worker, dan manifest PWA. |
 | 5.5.0 | Standardisasi seluruh ikon ke Bootstrap Icons (emoji dihapus total); sistem Semantic Versioning terpadu lintas berkas dengan sinkronisasi versi otomatis saat runtime antara halaman, Service Worker, dan manifest PWA. |
@@ -373,7 +384,7 @@ formgear-server/
 
 <div align="center">
 
-Saka Tracker v5.6.0 &middot; Alat bantu internal monitoring SE2026  
+Saka Tracker v5.8.0 &middot; Alat bantu internal monitoring SE2026  
 FormGear Pro removed — replaced by SurveyJS fullstack scaffold in /surveyjs-app
 
 </div>

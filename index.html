@@ -4,12 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title id="app-title">Saka Tracker V5.7.0 - Stable</title>
+    <title id="app-title">Saka Tracker V5.8.0 - Stable</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="assets/formgear/formgear-v2.css">
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#0b1120">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Saka Tracker">
@@ -38,6 +39,59 @@
             } catch (e) {
                 // If SweetAlert is not available, fall back to console to avoid native alert
                 console.log('ALERT:', msg);
+            }
+        }
+
+        // ===============================
+        // MODAL PROSES (untuk aksi klik yang butuh waktu lama:
+        // panggilan AI, koneksi jaringan, upload/sync Firebase, dll)
+        // ===============================
+        let __processingDepth = 0;
+        function showProcessing(msg, subtitle) {
+            __processingDepth++;
+            try {
+                Swal.fire({
+                    title: msg || 'Memproses...',
+                    html: '<div style="font-size:0.8rem;color:#94a3b8;margin-top:6px;">' +
+                        (subtitle || 'Mohon tunggu, jangan tutup atau muat ulang halaman.') + '</div>',
+                    background: '#1e293b',
+                    color: '#f1f5f9',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    allowEnterKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+            } catch (e) {
+                console.log('PROCESSING:', msg);
+            }
+        }
+        function updateProcessing(msg, subtitle) {
+            try {
+                if (Swal.isVisible()) {
+                    Swal.update({
+                        title: msg,
+                        html: '<div style="font-size:0.8rem;color:#94a3b8;margin-top:6px;">' +
+                            (subtitle || 'Mohon tunggu, jangan tutup atau muat ulang halaman.') + '</div>'
+                    });
+                }
+            } catch (e) { /* noop */ }
+        }
+        function closeProcessing() {
+            __processingDepth = Math.max(0, __processingDepth - 1);
+            if (__processingDepth > 0) return;
+            try {
+                if (Swal.isVisible()) Swal.close();
+            } catch (e) { /* noop */ }
+        }
+        // Jalankan sebuah async task dengan modal proses otomatis terbuka/tertutup,
+        // termasuk saat terjadi error (finally), agar modal tidak pernah "nyangkut".
+        async function withProcessing(msg, subtitle, taskFn) {
+            showProcessing(msg, subtitle);
+            try {
+                return await taskFn();
+            } finally {
+                closeProcessing();
             }
         }
     </script>
@@ -135,6 +189,7 @@
             --accent-green: #10b981;
             --accent-orange: #f59e0b;
             --accent-red: #ef4444;
+            --accent-purple: #8b5cf6;
             --border: #334155;
             --nav-height: 70px;
             --card-gap: 12px;
@@ -1879,6 +1934,12 @@
                 <div
                     style="margin-bottom: 8px; font-size: 0.68rem; color: var(--text-muted); background:#0b1120; border:1px solid var(--border); border-radius:8px; padding:6px 8px; text-align:left;">
                     <strong style="color:var(--text-main); font-size:0.7rem;"><i class="bi bi-clock-history"></i>
+                        v5.8.0</strong> — FormGear kini punya versioning sendiri, terpisah dari APP_VERSION Saka
+                    Tracker: <code>FORMGEAR_ENGINE_VERSION</code> (versi engine/templating), <code>schemaVersion</code>
+                    (versi bentuk-data form definition), dan <code>templateVersion</code> per-form (naik PATCH
+                    otomatis setiap kali sebuah form disimpan ulang). Form lama otomatis dimigrasi ke skema
+                    baru saat dimuat.<br>
+                    <strong style="color:var(--text-main); font-size:0.7rem;"><i class="bi bi-clock-history"></i>
                         v5.7.0</strong> — Perbaikan bug FormGear: Form Builder yang sebelumnya tidak bisa dipakai
                     sama sekali (ID kontainer tidak cocok), upload ke Firebase yang selalu gagal, listener Firebase
                     yang menumpuk, dan inisialisasi ganda saat membuka tab FormGear. Tab FormGear kini menampilkan
@@ -2038,7 +2099,7 @@
         //   - README.md   -> badge/judul versi
         // Ketidaksesuaian antar file akan terdeteksi otomatis saat runtime dan
         // dicatat sebagai console.warn (lihat checkVersionSync & checkManifestVersionSync).
-        const APP_VERSION = "5.7.0";
+        const APP_VERSION = "5.8.0";
         const BUILD_DATE = "20260711";
         const LEGAL_VERSION = "5.6.0"; // versi dokumen ToS/Privacy - naik hanya saat isi legal berubah
         const STORAGE_KEY = "saka_tracker_v5_4"; // kunci localStorage historis, tidak diubah agar data pengguna lama tetap kompatibel
@@ -2834,7 +2895,11 @@
                 'Top 3 SLS prioritas: ' + top3.map(s => s.kode + ' (' + s.open + ' open)').join(', ') + '. ' +
                 'Berikan insight strategis singkat dengan format: gunakan #### untuk judul bagian, **tebal** untuk penekanan, dan - untuk poin-poin.';
 
-            const insight = await orchestrator.generateInsight(aiPrompt);
+            const insight = await withProcessing(
+                'Menganalisis Progres...',
+                'Menghubungi AI provider (OpenAI / Gemini / Mistral), mohon tunggu.',
+                () => orchestrator.generateInsight(aiPrompt)
+            );
             document.getElementById('ai-insights').innerHTML = cleanAIResponse(insight);
 
             const container = document.getElementById('analysis-container');
@@ -2952,20 +3017,26 @@
         async function testAllApis() {
             const resultsDiv = document.getElementById('test-results');
             resultsDiv.innerHTML = '<i class="bi bi-arrow-repeat"></i> Menguji koneksi...';
+            showProcessing('Menguji Koneksi API...', 'Memeriksa OpenAI, Gemini, dan Mistral satu per satu.');
             let output = '';
             const tests = [
                 { name: 'OpenAI', key: state.apiKeys.openai, url: 'https://api.openai.com/v1/models', auth: 'Bearer ' + state.apiKeys.openai },
                 { name: 'Gemini', key: state.apiKeys.gemini, url: 'https://generativelanguage.googleapis.com/v1beta/models?key=' + state.apiKeys.gemini, auth: null },
                 { name: 'Mistral', key: state.apiKeys.mistral, url: 'https://api.mistral.ai/v1/models', auth: 'Bearer ' + state.apiKeys.mistral }
             ];
-            for (const t of tests) {
-                if (!t.key) { output += '<div><i class="bi bi-x-circle"></i> ' + t.name + ': API Key kosong</div>'; continue; }
-                try {
-                    const headers = t.auth ? { 'Authorization': t.auth } : {};
-                    const res = await fetch(t.url, { headers, signal: AbortSignal.timeout(5000) });
-                    if (res.ok) output += '<div style="color:var(--accent-green)"><i class="bi bi-check-circle-fill"></i> ' + t.name + ': Terhubung</div>';
-                    else output += '<div style="color:var(--accent-red)"><i class="bi bi-x-circle"></i> ' + t.name + ': Gagal (' + res.status + ')</div>';
-                } catch (e) { output += '<div style="color:var(--accent-red)"><i class="bi bi-x-circle"></i> ' + t.name + ': ' + e.message + '</div>'; }
+            try {
+                for (const t of tests) {
+                    if (!t.key) { output += '<div><i class="bi bi-x-circle"></i> ' + t.name + ': API Key kosong</div>'; continue; }
+                    updateProcessing('Menguji Koneksi API...', 'Sedang memeriksa ' + t.name + '...');
+                    try {
+                        const headers = t.auth ? { 'Authorization': t.auth } : {};
+                        const res = await fetch(t.url, { headers, signal: AbortSignal.timeout(5000) });
+                        if (res.ok) output += '<div style="color:var(--accent-green)"><i class="bi bi-check-circle-fill"></i> ' + t.name + ': Terhubung</div>';
+                        else output += '<div style="color:var(--accent-red)"><i class="bi bi-x-circle"></i> ' + t.name + ': Gagal (' + res.status + ')</div>';
+                    } catch (e) { output += '<div style="color:var(--accent-red)"><i class="bi bi-x-circle"></i> ' + t.name + ': ' + e.message + '</div>'; }
+                }
+            } finally {
+                closeProcessing();
             }
             resultsDiv.innerHTML = output;
         }
@@ -2983,6 +3054,7 @@
         function restoreData(inputElement) {
             const file = inputElement.files[0];
             if (!file) return;
+            showProcessing('Memulihkan Data...', 'Membaca dan memvalidasi berkas backup "' + file.name + '".');
             const reader = new FileReader();
             reader.onload = function (e) {
                 try {
@@ -2992,14 +3064,21 @@
                         if (!state.consent) state.consent = { accepted: false, version: null, date: null };
                         if (!state.security) state.security = { pinEnabled: false, pinHash: null, recoveryHash: null, failedAttempts: 0, lockUntil: null };
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                        closeProcessing();
                         showAlert('Data berhasil dipulihkan.');
                         location.reload();
                     } else {
+                        closeProcessing();
                         showAlert('File backup tidak valid.');
                     }
                 } catch (err) {
+                    closeProcessing();
                     showAlert('Gagal membaca file: ' + err.message);
                 }
+            };
+            reader.onerror = function () {
+                closeProcessing();
+                showAlert('Gagal membaca berkas backup.');
             };
             reader.readAsText(file);
         }
@@ -3435,7 +3514,11 @@
          * FormGear v2.0 Integration - Fungsi dan event handlers
          */
 
-        let currentFormGearForm = 'demo-kegiatan';
+        // BUGFIX: form demo/dummy ("demo-kegiatan", dst.) sudah dihapus dari
+        // aplikasi (lihat demo-forms.js). Tidak ada lagi form default yang
+        // di-hardcode di sini -- currentFormGearForm diisi saat pengguna
+        // memilih salah satu form miliknya sendiri dari katalog.
+        let currentFormGearForm = null;
         // BUGFIX: harus di-attach ke `window` secara eksplisit. `form-builder.js`
         // (file terpisah) membaca `window.formGearFirebaseManager` — sebelumnya
         // variabel ini dideklarasikan dengan `let` di scope script sehingga TIDAK
@@ -3465,13 +3548,29 @@
             if (formView) formView.style.display = 'none';
         }
 
+        // BUGFIX: sebelumnya katalog "Pilih Form" hanya membaca
+        // window.FormGearSampleForms (form demo/dummy yang kini sudah
+        // dihapus). Sekarang katalog ini membaca form yang benar-benar
+        // dibuat pengguna lewat Form Builder (getAllFormDefinitions()),
+        // sehingga tab "Isi Form" langsung berguna begitu pengguna membuat
+        // form pertamanya.
         function renderFormSelectorCards() {
             const cardList = document.getElementById('formgear-form-card-list');
             if (!cardList) return;
 
-            const forms = Array.isArray(window.FormGearSampleForms)
-                ? window.FormGearSampleForms
+            const forms = (window.FormGearBuilderInstance && typeof window.FormGearBuilderInstance.getAllFormDefinitions === 'function')
+                ? window.FormGearBuilderInstance.getAllFormDefinitions()
                 : [];
+
+            if (!forms.length) {
+                cardList.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 30px; background:#0f172a; border:1px solid rgba(148,163,184,0.12); border-radius: 18px;">
+                        <i class="bi bi-inbox" style="font-size: 2rem; display: block; margin-bottom: 10px;"></i>
+                        <p style="margin:0;">Belum ada form. Buat form pertama Anda di Form Builder.</p>
+                    </div>
+                `;
+                return;
+            }
 
             cardList.innerHTML = forms
                 .map((form) => {
@@ -3483,7 +3582,7 @@
                                 <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; min-height: 56px;">${form.description || ''}</div>
                             </div>
                             <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 16px;">
-                                <span style="font-size: 0.78rem; color: var(--text-muted);">${form.category || 'Template'}</span>
+                                <span style="font-size: 0.78rem; color: var(--text-muted);">${form.category || 'Template'} &middot; v${form.templateVersion || '1.0.0'}</span>
                                 <button onclick="handleFormChange('${form.id}')" style="padding: 10px 14px; background: ${isActive ? 'var(--accent-purple)' : 'var(--accent-blue)'}; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 0.82rem;">${isActive ? 'Dipilih' : 'Pilih'}</button>
                             </div>
                         </div>
@@ -3508,6 +3607,14 @@
             const emptyState = document.getElementById('formgear-empty-state');
             
             if (!gallery) return;
+
+            if (!currentFormGearForm) {
+                gallery.innerHTML = '';
+                if (emptyState) emptyState.style.display = 'flex';
+                const countEl = document.getElementById('local-submissions-count');
+                if (countEl) countEl.textContent = '0';
+                return;
+            }
 
             const savedForms = JSON.parse(localStorage.getItem('formgear_submissions') || '[]');
             const currentFormSubmissions = savedForms.filter(f => f.formId === currentFormGearForm);
@@ -3591,16 +3698,19 @@
 
             if (!formData) return;
 
+            showProcessing('Mengunggah Form...', 'Mengirim data form ke Firebase, mohon tunggu.');
             try {
                 const result = await window.formGearFirebaseManager.uploadFormData(
                     formData.formId,
                     formData.data
                 );
-                alert(`Form berhasil diunggah ke Firebase!\nID: ${result.id}`);
+                closeProcessing();
+                showAlert(`Form berhasil diunggah ke Firebase!\nID: ${result.id}`, 'success');
                 loadSubmittedForms();
                 updateFirebaseSubmissionCount();
             } catch (error) {
-                alert(`Gagal mengunggah: ${error.message}`);
+                closeProcessing();
+                showAlert(`Gagal mengunggah: ${error.message}`, 'error');
             }
         }
 
@@ -3644,9 +3754,11 @@
             const btn = event.target;
             btn.disabled = true;
             btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Menyinkronkan...';
+            showProcessing('Menyinkronkan Form...', 'Mengunggah 0/' + savedForms.length + ' form ke Firebase.');
 
             try {
                 let successCount = 0;
+                let doneCount = 0;
                 for (const formData of savedForms) {
                     try {
                         await window.formGearFirebaseManager.uploadFormData(
@@ -3657,13 +3769,17 @@
                     } catch (error) {
                         console.error(`Gagal upload form ${formData.formId}:`, error);
                     }
+                    doneCount++;
+                    updateProcessing('Menyinkronkan Form...', 'Mengunggah ' + doneCount + '/' + savedForms.length + ' form ke Firebase.');
                 }
 
-                alert(`Sinkronisasi selesai: ${successCount}/${savedForms.length} form berhasil diunggah`);
+                closeProcessing();
+                showAlert(`Sinkronisasi selesai: ${successCount}/${savedForms.length} form berhasil diunggah`, successCount === savedForms.length ? 'success' : 'warning');
                 loadSubmittedForms();
                 updateFirebaseSubmissionCount();
             } catch (error) {
-                alert(`Sinkronisasi gagal: ${error.message}`);
+                closeProcessing();
+                showAlert(`Sinkronisasi gagal: ${error.message}`, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-cloud-upload"></i> Sinkronkan Semua ke Firebase';
@@ -3671,14 +3787,30 @@
         }
 
         // Update Firebase submission count
+        // BUGFIX: rules keamanan Firebase Realtime Database pada proyek ini
+        // membatasi akses baca ke path /submissions/{formId} tertentu,
+        // sehingga request bisa gagal dengan "permission_denied". Ini bukan
+        // bug di aplikasi, melainkan pembatasan sisi server -- sebelumnya
+        // kegagalan ini dicatat sebagai console.error() lengkap dengan stack
+        // trace setiap kali terjadi, membuat console terlihat rusak padahal
+        // aplikasi tetap berjalan normal. Sekarang ditangani dengan senyap:
+        // counter ditampilkan sebagai "-" dan pesan dicatat sekali sebagai
+        // console.warn ringkas (tanpa stack trace berulang).
         async function updateFirebaseSubmissionCount() {
             if (!window.formGearFirebaseManager || !window.formGearFirebaseManager.initialized) return;
+            if (!currentFormGearForm) return;
 
+            const countEl = document.getElementById('firebase-submissions-count');
             try {
                 const submissions = await window.formGearFirebaseManager.getFormSubmissions(currentFormGearForm);
-                document.getElementById('firebase-submissions-count').textContent = submissions.length;
+                if (countEl) countEl.textContent = submissions.length;
             } catch (error) {
-                console.error('Error fetching Firebase submissions:', error);
+                if (countEl) countEl.textContent = '-';
+                if (error && error.code === 'PERMISSION_DENIED') {
+                    console.warn(`[FormGear] Tidak punya izin baca Firebase untuk "${currentFormGearForm}" (aturan keamanan database). Hitungan submission Firebase disembunyikan.`);
+                } else {
+                    console.warn('[FormGear] Gagal mengambil jumlah submission Firebase:', error && error.message ? error.message : error);
+                }
             }
         }
 

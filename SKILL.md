@@ -1,7 +1,7 @@
 # SAKA TRACKER — Technical Specification (SKILL.md)
   
 **App:** Saka Tracker — SE2026 SLS Progress Monitoring
-**Version documented:** v5.7.0 (Build 20260711)
+**Version documented:** v5.8.0 (Build 20260711)
 **Type:** Single-file client-side web app (HTML+CSS+JS, no backend, no build step) with a companion `manifest.json` + `sw.js` for PWA install/offline support
 **Storage:** Browser `localStorage`, key `saka_tracker_v5_4` (referenced via the `STORAGE_KEY` constant since v5.5.0; the literal key itself is unchanged for backward compatibility)
 **Author role documented for:** Saka_Omni (internal field-ops tooling)
@@ -364,5 +364,66 @@ Changelog entries live as a small inline note block inside the Settings `.app-in
 
 | Version | Change |
 |---|---|
+| v5.8.0 | Added independent Semantic Versioning for FormGear, see §15.5: `FORMGEAR_ENGINE_VERSION` (templating engine), `schemaVersion` (form-definition data shape), and a per-form `templateVersion` that auto-bumps PATCH on every save. Older forms are auto-migrated to the new fields on load via `migrateFormDefinition()`. This does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself. |
+| v5.7.0 (addendum) | Documented new FormGear advanced field types (`autonumber`, `customjs`) and their AI helper, see §15. This addendum does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself — it only documents the FormGear sub-module shipped alongside it (`assets/formgear/*`). |
 | v5.5.0 | Removed all emoji/emoticon usage app-wide in favor of Bootstrap Icons; documented the new cross-file Semantic Versioning policy and runtime version-sync mechanism between `index.html`, `sw.js`, and `manifest.json` (§12); updated §11 to reflect that the PWA shell (`manifest.json` + `sw.js`) now exists; removed the now-completed "PWA shell" item from §13. |
 | v5.4.5 | Initial SKILL.md written, covering full v5.4.5 architecture. Documents new Consent Gate + PIN Lock security layer, all core formulas, AI orchestrator, and known limitations/extension points. |
+
+---
+
+## 15. FormGear Form Builder — Advanced Fields & AI (`assets/formgear/`)
+
+FormGear is a SurveyJS-style form builder sub-module bundled in the same app (`assets/formgear/form-builder.js` + `formgear-v2.css`, loaded by `index.html` after the main inline script). It has its own field-type registry, preview/functional renderers, and local storage keys (`formgear_form_definitions`, `formgear_submissions`) — independent of Saka Tracker's `state`/`STORAGE_KEY`.
+
+### 15.1 Advanced field types
+
+| Type | Purpose | Config fields |
+|---|---|---|
+| `autonumber` | Auto-increment sequence number, read-only, assigned once per rendered form instance based on how many submissions already exist locally for that `formId` (`formgear_submissions`). | `autoStart`, `autoStep`, `autoPadding` (zero-pad digits), `autoPrefix` |
+| `customjs` | "Custom JS Column" — a computed, read-only field whose value is produced by running user-authored JavaScript (`field.jsCode`) via `new Function('data','utils', jsCode)` every time any other field on the form changes. | `jsCode` (must `return` a value). Receives `data` (all other field values, keyed by field `name`) and `utils` (`toNumber`, `sum`, `avg`, `today`). |
+
+Both types are treated as non-required, placeholder-less "computed" fields in the builder UI (`isComputedType()` / the extended `isStatic` check in `renderBuilderField`).
+
+**Recalculation engine** (`FormGearBuilder`):
+- `collectAllFieldValues(container, formDef)` — reads every field's current DOM value regardless of visibility (unlike `collectSubmissionData`, which only includes currently-visible fields).
+- `runCustomJsField(field, data)` — executes `field.jsCode`, returns `{value}` or `{error}`. **Not sandboxed** — runs in page context via `new Function`, consistent with this app's existing "local-first, zero-backend, no build step" design trade-offs (see §1, §10.2's similar disclaimer for PIN lock). Do not treat this as a security boundary.
+- `recalculateComputedFields(container, formDef)` — writes fresh `autonumber`/`customjs` values into their DOM inputs.
+- `refreshFormState(container, formDef)` = `recalculateComputedFields()` + `updateConditionalVisibility()`, called from every interaction handler in `wireFormFieldEvents` (click, change, and `input` events) so computed columns behave as live business-logic outputs, not one-shot defaults.
+
+### 15.2 AI helper — `FormGearAI`
+
+A small, self-contained object (not a class instance tied to Saka Tracker's DOM) that:
+- Reads API keys from the **same** `localStorage` key as Saka Tracker (`saka_tracker_v5_4` → `state.apiKeys.{openai,gemini,mistral}`) so users configure keys once in Settings and both subsystems use them. It does **not** import or depend on Saka Tracker's `HybridAIOrchestrator` class (which is tightly coupled to `#ai-provider-status` DOM and tracker-specific fallback logic) — this keeps FormGear a self-contained, independently-editable file per the project's no-build-step philosophy (§2).
+- `generateJsCode({label, name, instruction, context})` — prompts the provider chain (OpenAI → Gemini → Mistral, first configured+successful wins) to return **JS code only** (no prose, no markdown fences — enforced by prompt + `stripCodeFences()` defensive post-processing) for a `customjs` field, given the field's label/name and the list of other available field names/labels/types in the current form (so generated code references real `data.<name>` keys).
+- `suggestTemplate({...})` — summarizes the current form (sections, fields, types) and asks the same provider chain for short UI/template/business-logic recommendations in Bahasa Indonesia.
+- `deterministicTemplateSuggestion(...)` — non-AI, rule-based fallback used automatically when no API key is configured, so the feature degrades gracefully like the rest of the app's AI layer (§1, "Graceful AI degradation").
+
+### 15.3 UI entry points
+
+- **Per-field AI code badge**: an "AI" pill next to the Label input (only shown when `field.type === "customjs"`), plus a fuller instruction box + "Generate dengan AI" button inside the field's type editor. Both call `FormGearBuilderInstance.generateCustomJsCode(sectionIndex, path, depth)`. Generated code overwrites `field.jsCode` — the user should review it before relying on it, same caveat as any AI-generated code.
+- **Form-level AI template suggestion**: "Saran Template AI" button in the builder toolbar calls `requestAiTemplateSuggestion()`, rendering results (or the deterministic fallback) in a panel above the section editor.
+
+### 15.4 Known limitations (carry into future work)
+
+1. `customjs` code execution is **not sandboxed** — it can access anything the page's JS context can access. Acceptable for this single-user, local-first tool; would need a real sandbox (iframe + postMessage, or a JS interpreter like `Function` with a frozen/limited scope) before any multi-user or untrusted-form-author deployment.
+2. `autonumber` sequence is derived from `formgear_submissions` count at render time and "locked" per rendered DOM instance (`data-auto-assigned`) — it is **not** guaranteed globally unique across multiple browser tabs/devices (same local-first trade-off as the rest of the app, §1).
+3. AI-generated `customjs` code is inserted directly into the textarea without any static validation beyond the existing runtime try/catch in `runCustomJsField` — a confidently-wrong AI response will surface as a red "customjs-error" input with a hover tooltip, not a build-time error.
+4. `FormGearAI` prompts do not currently strip potentially sensitive values out of the "other fields" context list (labels/names only, not values, are sent — no submitted data values are sent to the AI provider for code generation; template suggestions send aggregate field type/label lists only, no respondent data), consistent with §6.2's "aggregate-only, never send `nama`/respondent data" rule for Saka Tracker's own AI prompts.
+
+### 15.5 FormGear versioning contract (independent of `APP_VERSION`)
+
+**Prior to v5.8.0, FormGear had no version identity of its own** — the templating engine and every form/template it produced were implicitly tied to whatever `APP_VERSION` Saka Tracker happened to be on, with no way to tell whether the *engine* had changed, whether a form's *data shape* had changed, or whether a specific *form* had been edited since it was created. As of v5.8.0, `assets/formgear/form-builder.js` defines three version identifiers, all Semantic Versioning (`MAJOR.MINOR.PATCH`), and all deliberately decoupled from each other and from `APP_VERSION`:
+
+| Identifier | Where it lives | What it tracks | When it changes |
+|---|---|---|---|
+| `FORMGEAR_ENGINE_VERSION` | Constant in `form-builder.js`, exposed as `window.FormGearEngineVersion` | The templating engine/renderer code itself (field-type registry, recalculation engine, AI helper) | Bumped by hand whenever the engine code changes, regardless of `APP_VERSION` or any individual form |
+| `FORMGEAR_SCHEMA_VERSION` | Constant in `form-builder.js`, exposed as `window.FormGearSchemaVersion` | The **shape** of a stored form-definition object (`{id, name, sections[], fields[], ...}`) | Bumped by hand only when the schema changes incompatibly; each bump should be paired with a new branch in `migrateFormDefinition()` |
+| `templateVersion` | Field on each individual form-definition object (`formgear_form_definitions`) | The revision history of **that one form/template** | Auto-initialized to `"1.0.0"` on creation; auto-bumped **PATCH** every time that specific form is re-saved via `saveBuilderDefinition()` — no manual step required |
+
+Each form-definition object also carries its own `schemaVersion` (stamped at creation/save time from `FORMGEAR_SCHEMA_VERSION`) and `createdAt`/`updatedAt` timestamps. `loadLocalDefinitions()` runs every locally-stored form through `migrateFormDefinition()` on load, so forms created before this system existed are automatically stamped with a `"0.9.0"` baseline `schemaVersion` and a `"1.0.0"` `templateVersion` instead of failing to load.
+
+This mirrors, at a smaller scale, the same "runtime drift detection, no build step" philosophy as §12: there is intentionally **no automatic sync** between `APP_VERSION`, `FORMGEAR_ENGINE_VERSION`, `FORMGEAR_SCHEMA_VERSION`, and any given `templateVersion` — they are allowed to advance independently. The engine version and current template's version/schema are surfaced as a small badge in the Form Builder toolbar (`renderBuilderPage()`), and each form's `templateVersion` is shown on its card in the "Pilih Form" catalog view in `index.html`.
+
+**Operational rule:** bump `FORMGEAR_ENGINE_VERSION` (MINOR for new capabilities, PATCH for bug fixes, MAJOR for breaking changes to the builder API surface itself) whenever `form-builder.js` changes; bump `FORMGEAR_SCHEMA_VERSION` (and add a migration branch) only when the stored form-definition shape changes incompatibly. Do **not** conflate either with `APP_VERSION` — a Saka Tracker release can ship with no FormGear changes at all, and vice versa.
+
+---
