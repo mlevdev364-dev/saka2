@@ -1,0 +1,191 @@
+.formgear-builder-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.formgear-builder-panel {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  margin-top: 16px;
+}
+
+.formgear-builder-panel h4 {
+  margin-bottom: 12px;
+  color: var(--text-main);
+  font-size: 0.95rem;
+}
+
+.formgear-builder-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.formgear-builder-row label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+
+.formgear-builder-row input,
+.formgear-builder-row select,
+.formgear-builder-row textarea {
+  width: 100%;
+  background: #0b1120;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-main);
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.formgear-builder-row textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.formgear-builder-section {
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+  background: #111827;
+}
+
+.formgear-builder-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.formgear-builder-section .section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.formgear-builder-field {
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #0b172a;
+}
+
+.formgear-builder-field .field-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.formgear-builder-field .field-actions button {
+  min-width: 120px;
+}
+
+.formgear-builder-children {
+  margin-top: 10px;
+  padding-left: 14px;
+  border-left: 2px solid rgba(148, 163, 184, 0.15);
+}
+
+.formgear-form-preview {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  margin-top: 20px;
+}
+
+.formgear-form-preview h3 {
+  margin-top: 0;
+  color: var(--accent-blue);
+}
+
+.formgear-form-preview .form-section-preview {
+  margin-bottom: 18px;
+}
+
+.formgear-form-preview .field-preview {
+  margin-bottom: 12px;
+}
+
+.formgear-form-preview .field-preview label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+}
+
+.formgear-form-preview .field-preview input,
+.formgear-form-preview .field-preview textarea,
+.formgear-form-preview .field-preview select {
+  width: 100%;
+  background: #0b1120;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-main);
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.formgear-form-preview .field-preview textarea {
+  min-height: 80px;
+}
+
+.formgear-form-preview button {
+  margin-top: 14px;
+}
+
+.formgear-json-output {
+  width: 100%;
+  min-height: 180px;
+  background: #0b1120;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  color: var(--text-main);
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.formgear-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.formgear-form-card {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.formgear-form-card h4 {
+  margin: 0 0 10px;
+  color: var(--text-main);
+}
+
+.formgear-form-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.formgear-submit-button {
+  width: 100%;
+}

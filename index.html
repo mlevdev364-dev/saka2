@@ -1,0 +1,3845 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title id="app-title">Saka Tracker V5.6.0 - Stable</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="assets/formgear/formgear-v2.css">
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0b1120">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Saka Tracker">
+    <link rel="apple-touch-icon" href="./launchericon-192x192.png">
+
+    <!-- PWA Script - Register Service Worker & Version Sync -->
+    <!-- KETERANGAN VERSIONING: APP_VERSION (index.html) harus selalu sinkron dengan
+     SW_VERSION (sw.js, lihat CACHE_NAME) dan version (manifest.json). Ketiganya
+     saling memberi tahu versi masing-masing saat runtime (lihat checkVersionSync
+     dan listener 'message' di bawah) sehingga ketidaksinkronan antar file dapat
+     terdeteksi otomatis lewat console warning, dan pengguna diberi tahu lewat
+     banner "Versi baru tersedia" saat Service Worker baru selesai di-install. -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+    <script>
+        // Helper wrapper that replaces native alert() with SweetAlert2
+        function showAlert(msg, icon) {
+            try {
+                if (!icon) {
+                    const l = String(msg).toLowerCase();
+                    if (l.includes('berhasil') || l.includes('success')) icon = 'success';
+                    else if (l.includes('gagal') || l.includes('error') || l.includes('failed')) icon = 'error';
+                    else if (l.includes('peringatan') || l.includes('warning')) icon = 'warning';
+                    else icon = 'info';
+                }
+                Swal.fire({ text: String(msg), icon: icon, confirmButtonText: 'OK' });
+            } catch (e) {
+                // If SweetAlert is not available, fall back to console to avoid native alert
+                console.log('ALERT:', msg);
+            }
+        }
+    </script>
+    <script>
+        window.__SAKA_UPDATE_SW_REG = null;
+
+        function checkVersionSync(swVersion) {
+            if (typeof APP_VERSION === 'undefined') return;
+            if (swVersion && swVersion !== APP_VERSION) {
+                console.warn('[VERSION] Ketidaksinkronan versi terdeteksi -> index.html: ' + APP_VERSION + ', sw.js: ' + swVersion);
+            }
+        }
+
+        function checkManifestVersionSync() {
+            fetch(new URL('./manifest.json', window.location.href), { cache: 'no-store' })
+                .then(function (res) { return res.json(); })
+                .then(function (manifest) {
+                    if (typeof APP_VERSION === 'undefined') return;
+                    if (manifest.version && manifest.version !== APP_VERSION) {
+                        console.warn('[VERSION] Ketidaksinkronan versi terdeteksi -> index.html: ' + APP_VERSION + ', manifest.json: ' + manifest.version);
+                    }
+                })
+                .catch(function () { /* manifest tidak dapat diakses (mis. mode offline) */ });
+        }
+
+        function showUpdateBanner() {
+            const banner = document.getElementById('update-banner');
+            if (banner) banner.classList.add('show');
+        }
+
+        function applyUpdate() {
+            const reg = window.__SAKA_UPDATE_SW_REG;
+            if (reg && reg.waiting) {
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            } else {
+                window.location.reload();
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', function () {
+                if (refreshing) return;
+                refreshing = true;
+                window.location.reload();
+            });
+
+            navigator.serviceWorker.addEventListener('message', function (event) {
+                if (event.data && event.data.type === 'SW_ACTIVATED') {
+                    checkVersionSync(event.data.version);
+                }
+            });
+
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register(new URL('./sw.js', window.location.href), { scope: './' })
+                    .then(function (registration) {
+                        console.log('[SW] Service Worker registered successfully:', registration);
+                        window.__SAKA_UPDATE_SW_REG = registration;
+                        checkManifestVersionSync();
+
+                        if (registration.waiting && navigator.serviceWorker.controller) {
+                            showUpdateBanner();
+                        }
+
+                        registration.addEventListener('updatefound', function () {
+                            const newWorker = registration.installing;
+                            if (!newWorker) return;
+                            newWorker.addEventListener('statechange', function () {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    showUpdateBanner();
+                                }
+                            });
+                        });
+                    })
+                    .catch(function (error) {
+                        console.log('[SW] Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // Check if app is installed (standalone mode)
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            console.log('[PWA] Saka Tracker running in standalone mode');
+            document.body.classList.add('pwa-mode');
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-color: #0b1120;
+            --card-bg: #1e293b;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --border: #334155;
+            --nav-height: 70px;
+            --card-gap: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding-bottom: calc(var(--nav-height) + 30px);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+            padding-top: 10px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 10px 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 10px 0 12px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 4px;
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .header .version-badge {
+            font-size: 0.65rem;
+            background: var(--accent-blue);
+            color: white;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        /* UPDATE BANNER - PWA VERSION SYNC */
+        .update-banner {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: calc(var(--nav-height) + 12px);
+            z-index: 2000;
+            background: var(--card-bg);
+            border: 1px solid var(--accent-blue);
+            border-radius: 12px;
+            padding: 10px 12px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            justify-content: space-between;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        .update-banner.show {
+            display: flex;
+        }
+
+        .update-banner .ub-text {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--text-main);
+        }
+
+        .update-banner .ub-text i {
+            color: var(--accent-blue);
+            font-size: 1rem;
+        }
+
+        .update-banner button {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        /* HEADER STATS - DATA AGREGAT */
+        .header-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: #0f172a;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .header-stat {
+            text-align: center;
+        }
+
+        .header-stat-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .header-stat-value {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .header-stat-value.blue {
+            color: var(--accent-blue);
+        }
+
+        .header-stat-value.orange {
+            color: var(--accent-orange);
+        }
+
+        .header-stat-value.green {
+            color: var(--accent-green);
+        }
+
+        .header-stat-value.purple {
+            color: #a78bfa;
+        }
+
+        .form-section {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px 18px;
+            border: 1px solid var(--border);
+            margin-bottom: 4px;
+        }
+
+        /* ACCORDION TOGGLE */
+        .accordion-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            padding: 6px 0;
+            user-select: none;
+        }
+
+        .accordion-toggle:hover {
+            opacity: 0.8;
+        }
+
+        .accordion-toggle .bi {
+            transition: transform 0.3s ease;
+            font-size: 1.2rem;
+        }
+
+        .accordion-toggle.open .bi {
+            transform: rotate(180deg);
+        }
+
+        .accordion-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .accordion-body.open {
+            max-height: 2000px;
+        }
+
+        .input-mode-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #0f172a;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+        }
+
+        .toggle-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-range-info {
+            font-size: 0.7rem;
+            color: var(--accent-blue);
+            margin-top: 2px;
+            display: none;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #334155;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: var(--accent-blue);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(18px);
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: 50px repeat(5, 1fr);
+            gap: 4px;
+            align-items: center;
+            font-size: 0.7rem;
+            margin-bottom: 8px;
+        }
+
+        .input-header {
+            color: var(--text-muted);
+            font-weight: 600;
+            text-align: center;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.65rem;
+        }
+
+        .sls-code {
+            font-weight: bold;
+            color: var(--accent-blue);
+            text-align: left;
+            padding-left: 2px;
+            font-size: 0.75rem;
+        }
+
+        input[type="number"],
+        input[type="password"],
+        input[type="text"] {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 10px 6px;
+            border-radius: 8px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            -moz-appearance: textfield;
+        }
+
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            background: #172033;
+        }
+
+        .draft-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 5px;
+            border-top: 1px solid var(--border);
+            margin-top: 8px;
+        }
+
+        .draft-label {
+            font-weight: bold;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .draft-input-wrap {
+            width: 90px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue), #2563eb);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            margin-top: 12px;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background: var(--accent-green);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 12px;
+            width: 100%;
+            font-weight: 600;
+            margin-top: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 12px;
+            border-radius: 12px;
+            width: 100%;
+            margin-top: 10px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-outline:hover {
+            background: var(--border);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--accent-red);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        #analysis-container {
+            display: none;
+            animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px 18px;
+            border: 1px solid var(--border);
+            margin: 0;
+            width: 100%;
+        }
+
+        .result-title {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px 18px;
+            border: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+
+        .history-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .history-date {
+            font-weight: bold;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        .history-stat-item {
+            background: #0f172a;
+            padding: 8px 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .history-stat-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .history-stat-value {
+            font-weight: bold;
+            font-size: 0.95rem;
+            margin-top: 2px;
+        }
+
+        .forecast-box {
+            padding: 12px 14px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .forecast-ok {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--accent-green);
+        }
+
+        .forecast-warn {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: var(--accent-orange);
+        }
+
+        .forecast-crit {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--accent-red);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .metric-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .diff-analysis-box {
+            background: rgba(59, 130, 246, 0.05);
+            border: 1px dashed var(--accent-blue);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .diff-title {
+            font-size: 0.7rem;
+            color: var(--accent-blue);
+            font-weight: bold;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .diff-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            margin-bottom: 2px;
+            color: var(--text-muted);
+        }
+
+        .diff-val {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .priority-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .priority-item {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .priority-header {
+            padding: 10px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .p-rank {
+            width: 22px;
+            height: 22px;
+            background: var(--border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .p-info {
+            flex: 1;
+        }
+
+        .p-code {
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        .p-score {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        .p-action {
+            font-size: 0.6rem;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .action-lanjut {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-blue);
+        }
+
+        .action-mulai {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-orange);
+        }
+
+        .action-done {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+        }
+
+        .action-urgent {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        .priority-detail {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+            background: #162032;
+            border-top: 1px solid var(--border);
+        }
+
+        .priority-detail.open {
+            max-height: 500px;
+        }
+
+        .detail-content {
+            padding: 10px 12px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .toggle-icon {
+            transition: transform 0.3s;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .priority-item.expanded .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .perf-display {
+            text-align: center;
+            padding: 6px 0;
+        }
+
+        .grade-big {
+            font-size: 2.8rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+
+        .progress-track {
+            height: 6px;
+            background: #334155;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            transition: width 1s ease;
+        }
+
+        .ai-text {
+            font-size: 0.88rem;
+            color: var(--text-main);
+            line-height: 1.7;
+        }
+
+        .ai-text p {
+            margin-bottom: 8px;
+        }
+
+        .ai-text strong {
+            color: var(--text-main);
+        }
+
+        .ai-text ul,
+        .ai-text ol {
+            margin: 4px 0 8px 20px;
+        }
+
+        .ai-text li {
+            margin-bottom: 4px;
+        }
+
+        .ai-text h4 {
+            font-size: 0.85rem;
+            color: var(--accent-blue);
+            margin: 12px 0 4px;
+        }
+
+        .ai-text h5 {
+            font-size: 0.8rem;
+            color: var(--accent-orange);
+            margin: 8px 0 4px;
+        }
+
+        .ai-highlight {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .ai-warn {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .ai-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .ai-text .ai-section {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin: 8px 0;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .ai-text .ai-section.risk {
+            border-left-color: var(--accent-red);
+        }
+
+        .ai-text .ai-section.success {
+            border-left-color: var(--accent-green);
+        }
+
+        .setting-group {
+            margin-bottom: 18px;
+        }
+
+        .setting-group label {
+            display: block;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+        }
+
+        .api-status {
+            font-size: 0.75rem;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--border);
+        }
+
+        .status-dot.active {
+            background: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .app-info-box {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            margin-top: 24px;
+            text-align: center;
+        }
+
+        .app-name {
+            font-size: 1rem;
+            font-weight: bold;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .dev-contact {
+            margin: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .contact-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 6px 14px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .contact-btn:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .legal-links {
+            margin-top: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .legal-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            cursor: pointer;
+            text-decoration: underline;
+            padding: 4px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 99999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 22px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-body {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .modal-body .legal-updated {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            opacity: 0.8;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .modal-body h4 {
+            color: var(--text-main);
+            font-size: 0.85rem;
+            margin: 12px 0 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .modal-body h4:first-of-type {
+            margin-top: 0;
+        }
+
+        .modal-body p {
+            margin-bottom: 6px;
+        }
+
+        .modal-body ul {
+            margin: 4px 0 6px 18px;
+            padding: 0;
+        }
+
+        .modal-body li {
+            margin-bottom: 3px;
+        }
+
+        .modal-body strong {
+            color: var(--text-main);
+        }
+
+        .modal-body .legal-note {
+            background: rgba(59, 130, 246, 0.08);
+            border-left: 3px solid var(--accent-blue);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-size: 0.8rem;
+        }
+
+        .modal-close {
+            margin-top: 16px;
+            width: 100%;
+        }
+
+        .full-gate {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 999999;
+            background: var(--bg-color);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 16px;
+            overflow-y: auto;
+        }
+
+        .gate-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 24px 20px;
+            max-width: 440px;
+            width: 100%;
+            max-height: 92vh;
+            overflow-y: auto;
+        }
+
+        .gate-scroll {
+            max-height: 34vh;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 4px;
+        }
+
+        .gate-scroll ul {
+            margin: 6px 0 4px 18px;
+        }
+
+        .gate-scroll li {
+            margin-bottom: 6px;
+        }
+
+        .gate-scroll strong {
+            color: var(--text-main);
+        }
+
+        .consent-check-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin: 12px 0;
+        }
+
+        .consent-check-row input {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            accent-color: var(--accent-blue);
+        }
+
+        .pin-dots {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 14px 0 6px;
+        }
+
+        .pin-dots span {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #334155;
+            border: 1px solid var(--border);
+            transition: all .15s ease;
+            display: inline-block;
+        }
+
+        .pin-dots span.filled {
+            background: var(--accent-blue);
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+        }
+
+        .pin-keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 240px;
+            margin: 4px auto 0;
+        }
+
+        .pin-key {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            font-size: 1.2rem;
+            font-weight: 600;
+            padding: 14px 0;
+            border-radius: 14px;
+            cursor: pointer;
+        }
+
+        .pin-key:active {
+            background: var(--border);
+        }
+
+        .pin-key.empty {
+            background: transparent;
+            border: none;
+            cursor: default;
+        }
+
+        #pin-error {
+            color: var(--accent-red);
+            font-size: 0.75rem;
+            min-height: 16px;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--nav-height);
+            background: rgba(11, 17, 32, 0.98);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 9999;
+            padding-bottom: env(safe-area-inset-bottom);
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.55rem;
+            padding: 6px 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 12px;
+            min-width: 55px;
+            background: transparent;
+            border: none;
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        .nav-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .nav-item.active {
+            color: var(--accent-blue);
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .nav-item.active .nav-icon {
+            color: var(--accent-blue);
+            transform: scale(1.1);
+        }
+
+        .nav-icon {
+            font-size: 1.3rem;
+            margin-bottom: 1px;
+            transition: transform 0.3s ease;
+        }
+
+        .nav-item span {
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
+        .footer-status {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+            opacity: 0.7;
+        }
+
+        .provider-active {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 24px 16px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            opacity: 0.3;
+        }
+
+        .legend-box {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-top: 8px;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .legend-dot.open {
+            background: var(--accent-blue);
+        }
+
+        .legend-dot.submit {
+            background: var(--accent-orange);
+        }
+
+        .legend-dot.approve {
+            background: var(--accent-green);
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 6px 8px 14px;
+            }
+
+            .form-section {
+                padding: 10px 12px;
+            }
+
+            .input-grid {
+                gap: 2px;
+                font-size: 0.55rem;
+            }
+
+            .input-grid input {
+                padding: 6px 2px;
+                font-size: 0.7rem;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-item {
+                padding: 4px 8px;
+                min-width: 45px;
+            }
+
+            .nav-icon {
+                font-size: 1.1rem;
+            }
+
+            .result-card {
+                padding: 12px 14px;
+            }
+
+            .header h1 {
+                font-size: 0.95rem;
+            }
+
+            .history-stats {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .legend-box {
+                grid-template-columns: 1fr;
+            }
+
+            .header-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* PWA Mode - Tampilan saat diinstall */
+        .pwa-mode .install-banner {
+            display: none !important;
+        }
+
+        /* Tombol install di browser (opsional) */
+        .install-banner {
+            background: var(--card-bg);
+            border: 1px solid var(--accent-blue);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .install-banner.show {
+            display: flex;
+        }
+
+        .install-banner .btn-install {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- VERSION UPDATE BANNER -->
+    <div id="update-banner" class="update-banner">
+        <div class="ub-text"><i class="bi bi-arrow-repeat"></i> Versi baru tersedia.</div>
+        <button onclick="applyUpdate()"><i class="bi bi-arrow-clockwise"></i> Muat Ulang</button>
+    </div>
+
+    <!-- DASHBOARD PAGE -->
+    <div id="page-dashboard" class="page active container">
+        <div class="header">
+            <h1>
+                <i class="bi bi-graph-up-arrow"></i> SAKA TRACKER
+                <span class="version-badge" id="app-version-badge">v5.6.0</span>
+            </h1>
+            <p id="current-date">Memuat tanggal...</p>
+
+            <!-- HEADER STATS - DATA AGREGAT -->
+            <div class="header-stats" id="header-stats">
+                <div class="header-stat">
+                    <div class="header-stat-label"><i class="bi bi-folder-open"></i> Open</div>
+                    <div class="header-stat-value blue" id="stat-open">0</div>
+                </div>
+                <div class="header-stat">
+                    <div class="header-stat-label"><i class="bi bi-file-earmark-check"></i> Submit</div>
+                    <div class="header-stat-value orange" id="stat-submit">0</div>
+                </div>
+                <div class="header-stat">
+                    <div class="header-stat-label"><i class="bi bi-check-circle"></i> Approve</div>
+                    <div class="header-stat-value green" id="stat-approve">0</div>
+                </div>
+                <div class="header-stat">
+                    <div class="header-stat-label"><i class="bi bi-database"></i> Muatan</div>
+                    <div class="header-stat-value purple" id="stat-muatan">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <!-- ACCORDION TOGGLE -->
+            <div class="accordion-toggle open" onclick="toggleAccordion(this)">
+                <span style="font-weight:600; font-size:0.9rem;"><i class="bi bi-pencil-square"></i> Input Data
+                    SLS</span>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="accordion-body open" id="accordion-body">
+                <div class="input-mode-toggle">
+                    <div>
+                        <div class="toggle-label"><i class="bi bi-calendar-event"></i> Mode Input Harian</div>
+                        <div class="date-range-info" id="date-range-display">Data per 15 Juni s.d 7 Juli 2026</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="mode-akumulasi" onchange="toggleInputMode()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="legend-box">
+                    <div class="legend-item"><span class="legend-dot open"></span> Open = Belum dikerjakan</div>
+                    <div class="legend-item"><span class="legend-dot submit"></span> Submit = Sudah dikerjakan</div>
+                    <div class="legend-item"><span class="legend-dot approve"></span> Approve = Sudah divalidasi PML
+                    </div>
+                </div>
+
+                <div class="input-grid">
+                    <div class="input-header">Kode</div>
+                    <div class="input-header">Open</div>
+                    <div class="input-header">Sub</div>
+                    <div class="input-header">Rej</div>
+                    <div class="input-header">Pend</div>
+                    <div class="input-header">App</div>
+                    <div id="sls-inputs-container" style="display:contents"></div>
+                </div>
+
+                <div class="draft-row">
+                    <span class="draft-label"><i class="bi bi-file-earmark-text"></i> DRAFT TOTAL</span>
+                    <div class="draft-input-wrap"><input type="number" id="global-draft" value="27"></div>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="btn-analyze" onclick="runAnalysis()"><i class="bi bi-cpu"></i> ANALISIS &
+                SIMPAN SNAPSHOT</button>
+        </div>
+
+        <div id="analysis-container">
+            <div class="result-card" id="termin-alert-card" style="display:none;">
+                <div class="result-title"><i class="bi bi-exclamation-triangle-fill"></i> STATUS TERMIN PEMBAYARAN 1
+                </div>
+                <div id="termin-status"></div>
+            </div>
+
+            <div class="result-card">
+                <div class="result-title"><i class="bi bi-lightning-charge-fill"></i> FORECAST ENGINE (CLEARANCE)</div>
+                <div id="forecast-status"></div>
+                <div id="forecast-details" style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;"></div>
+            </div>
+
+            <div class="result-card">
+                <div class="result-title"><i class="bi bi-bar-chart-line-fill"></i> KOMPARASI & TARGET HARIAN</div>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <span class="metric-label">% Dashboard FASIH</span>
+                        <span class="metric-value" id="comp-dash-persen" style="color:var(--accent-blue)">-</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">% Muatan Kontrak</span>
+                        <span class="metric-value" id="comp-muatan-persen" style="color:var(--accent-green)">-</span>
+                    </div>
+                    <div class="metric-item"
+                        style="grid-column: 1/-1; border-top:1px solid var(--border); padding-top:8px; margin-top:4px;">
+                        <span class="metric-label">Ritme Saat Ini (7 Hari Terakhir)</span>
+                        <span class="metric-value" id="curr-velocity">-</span>
+                    </div>
+                    <div class="metric-item" style="grid-column: 1/-1;">
+                        <span class="metric-label">Ritme Dibutuhkan (Bulat)</span>
+                        <span class="metric-value" id="req-velocity" style="color:var(--accent-orange)">-</span>
+                    </div>
+                </div>
+
+                <div class="diff-analysis-box" id="diff-analysis-box">
+                    <div class="diff-title"><i class="bi bi-plus-circle-dotted"></i> Analisis Selisih Data Lapangan
+                    </div>
+                    <div class="diff-row">
+                        <span>Selisih Asesmen (Temuan Baru):</span>
+                        <span class="diff-val" id="diff-assessment">0</span>
+                    </div>
+                    <div class="diff-row">
+                        <span>Selisih Muatan Kontrak:</span>
+                        <span class="diff-val" id="diff-muatan">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="result-card">
+                <div class="result-title"><i class="bi bi-sort-down-alt"></i> PRIORITAS KERJA OPTIMAL</div>
+                <div class="priority-list" id="priority-list"></div>
+            </div>
+
+            <div class="result-card">
+                <div class="result-title"><i class="bi bi-speedometer2"></i> PERFORMANCE & TREND</div>
+                <div class="perf-display">
+                    <div class="grade-big" id="perf-grade">-</div>
+                    <div class="grade-desc" id="perf-desc"
+                        style="color:var(--text-muted); font-size:0.8rem; margin-bottom:8px;">-</div>
+                    <div style="font-size:0.7rem; color:var(--text-muted);" id="perf-delta">-</div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:6px;">
+                    <span>Progress Dashboard</span>
+                    <span class="metric-value" id="dash-persen" style="font-size:0.9rem;">-</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="dash-bar" style="background:var(--accent-green); width:0%"></div>
+                </div>
+            </div>
+
+            <div class="result-card">
+                <div class="result-title"><i class="bi bi-brain"></i> MULTI-AI STRATEGIC INSIGHT</div>
+                <div id="ai-insights" class="ai-text">
+                    <div style="color:var(--text-muted); font-style:italic; padding:6px 0;">Menunggu analisis AI...
+                    </div>
+                </div>
+                <div class="footer-status" id="ai-provider-status">
+                    Multi-AI Orchestrator | Provider: <span class="provider-active">Standby</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DATA SLS PAGE -->
+    <div id="page-data" class="page container">
+        <div class="header">
+            <h1><i class="bi bi-database-fill-gear"></i> MANAJEMEN DATA SLS</h1>
+            <p>Kelola Master Data Open FASIH & Muatan</p>
+        </div>
+
+        <div class="form-section">
+            <div
+                style="display: grid; grid-template-columns: 60px 1fr 1fr 40px; gap: 8px; margin-bottom: 12px; font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+                <div>Kode</div>
+                <div>Open FASIH</div>
+                <div>Muatan</div>
+                <div></div>
+            </div>
+            <div id="data-sls-list"></div>
+
+            <button class="btn-outline" onclick="addNewSLSRow()" style="margin-top: 12px;"><i class="bi bi-plus-lg"></i>
+                Tambah Baris SLS Baru</button>
+            <button class="btn-success" onclick="saveDataSLS()" style="margin-top: 8px;"><i class="bi bi-save"></i>
+                Simpan Perubahan Data Master</button>
+        </div>
+    </div>
+
+    <!-- HISTORY PAGE -->
+    <div id="page-history" class="page container">
+        <div class="header">
+            <h1><i class="bi bi-clock-history"></i> HISTORY ANALISIS</h1>
+            <p>Riwayat snapshot progres per hari</p>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="color:var(--text-muted); font-size:0.8rem;">Total <span id="history-count">0</span>
+                snapshot</span>
+            <button class="btn-danger" onclick="clearAllHistory()" style="font-size:0.7rem; padding:6px 12px;">
+                <i class="bi bi-trash3"></i> Hapus Semua
+            </button>
+        </div>
+
+        <div id="history-list">
+            <div class="empty-state">
+                <i class="bi bi-inbox"></i>
+                <p>Belum ada history. Lakukan analisis untuk menyimpan snapshot.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- FORMGEAR PAGE -->
+    <div id="page-formgear" class="page container">
+        <div class="header">
+            <h1><i class="bi bi-ui-checks-grid"></i> FORMGEAR v2.0</h1>
+            <p>Form dinamis dengan template HTML dan upload Firebase</p>
+        </div>
+
+        <div class="form-section">
+            <!-- Firebase Status -->
+            <div class="api-status" id="firebase-status">
+                <span class="status-dot"></span> 
+                Menginisialisasi Firebase...
+            </div>
+
+            <!-- Form Selector -->
+            <div style="margin: 12px 0 8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Pilih Form:</label>
+                <select id="formgear-form-selector" onchange="handleFormChange(this.value)" style="flex:1; min-width:220px; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#0f172a; color:var(--text-main); font-size: 0.85rem;">
+                    <option value="demo-kegiatan">📋 Form Kegiatan Survey</option>
+                    <option value="demo-pelaporan">📊 Form Pelaporan Harian</option>
+                    <option value="demo-feedback">💬 Form Feedback Lapangan</option>
+                </select>
+                <button class="btn-success" onclick="switchPage('formbuilder')" style="padding: 10px 16px; border:none; border-radius: 8px; font-weight: 600; font-size: 0.85rem; white-space: nowrap; cursor:pointer; display:flex; align-items:center; gap:6px; justify-content:center;">
+                    <i class="bi bi-hammer" style="margin-right: 4px;"></i> Buka Form Builder
+                </button>
+            </div>
+
+            <!-- Form Container -->
+            <div id="formgear-container" style="margin-top: 16px; min-height: 400px;"></div>
+
+            <!-- Submitted Forms Gallery -->
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
+                <h4 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-hammer"></i> Form Definitions (dari Form Builder)
+                </h4>
+                <div id="form-definitions-gallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
+            </div>
+
+            <!-- Submitted Forms Gallery -->
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
+                <h4 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-collection"></i> Form Terkirim
+                </h4>
+                <div id="formgear-gallery" class="formgear-gallery"></div>
+                <div id="formgear-empty-state" class="empty-state">
+                    <i class="bi bi-inbox"></i>
+                    <p>Belum ada form yang terkirim</p>
+                </div>
+            </div>
+
+            <!-- Sync Info -->
+            <div style="margin-top: 24px; padding: 12px; background: #0f172a; border: 1px solid var(--border); border-radius: 8px;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <span style="color: var(--text-main); font-weight: 600;" id="local-submissions-count">0</span> form lokal
+                    </div>
+                    <div>
+                        <span style="color: var(--text-main); font-weight: 600;" id="firebase-submissions-count">0</span> form Firebase
+                    </div>
+                    <button class="btn-outline" onclick="syncFormToFirebase()" style="padding: 6px 12px; font-size: 0.75rem; grid-column: 1/-1;">
+                        <i class="bi bi-cloud-upload"></i> Sinkronkan Semua ke Firebase
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FORM BUILDER PAGE -->
+    <div id="page-formbuilder" class="page container">
+        <div class="header">
+            <h1><i class="bi bi-hammer"></i> FORM BUILDER</h1>
+            <p>Rancang form dinamis nested, pratinjau, ekspor JSON, simpan lokal, dan unggah ke Firebase.</p>
+        </div>
+
+        <div class="form-section">
+            <div style="display: grid; gap: 16px;">
+                <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;">
+                    <select id="builder-template-selector" onchange="selectBuilderTemplate(this.value)"
+                        style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:#0f172a; color:var(--text-main);">
+                    </select>
+                    <button class="btn-outline" onclick="createNewBuilderForm()"><i class="bi bi-file-earmark-plus"></i> Baru</button>
+                    <button class="btn-success" onclick="saveBuilderForm()"><i class="bi bi-save"></i> Simpan</button>
+                </div>
+
+                <div style="display: grid; gap: 12px;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <input type="text" id="builder-form-name" placeholder="Nama Form" onchange="updateBuilderMeta('name', this.value)" style="padding: 12px 14px; border-radius: 12px; border:1px solid var(--border); background:#0f172a; color:var(--text-main);">
+                        <input type="text" id="builder-form-category" placeholder="Kategori" onchange="updateBuilderMeta('category', this.value)" style="padding: 12px 14px; border-radius: 12px; border:1px solid var(--border); background:#0f172a; color:var(--text-main);">
+                    </div>
+                    <textarea id="builder-form-description" rows="2" placeholder="Deskripsi singkat form" onchange="updateBuilderMeta('description', this.value)" style="width:100%; padding: 12px 14px; border-radius: 12px; border:1px solid var(--border); background:#0f172a; color:var(--text-main);"></textarea>
+                </div>
+
+                <div id="builder-control-panel"></div>
+
+                <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                    <button class="btn-outline" onclick="addBuilderSection()"><i class="bi bi-layout-text-sidebar-reverse"></i> Tambah Bagian</button>
+                    <button class="btn-outline" onclick="exportBuilderJson()"><i class="bi bi-code-slash"></i> Ekspor JSON</button>
+                    <button class="btn-outline" onclick="uploadBuilderDefinitionToFirebase()"><i class="bi bi-cloud-upload"></i> Unggah Definisi</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 style="margin:0; font-size:0.95rem; font-weight:600;">Pratinjau Form</h4>
+                <div style="font-size:0.75rem; color:var(--text-muted);">Klik tombol simpan sebelum submit.</div>
+            </div>
+            <div id="builder-preview" style="min-height:240px; background:#0f172a; border:1px solid var(--border); border-radius:14px; padding:16px;"></div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-top:12px;">
+                <button class="btn-success" onclick="submitBuilderPreview()"><i class="bi bi-send-check"></i> Simpan Data Lokal</button>
+                <button class="btn-outline" onclick="uploadPreviewSubmissionToFirebase()"><i class="bi bi-cloud-upload"></i> Unggah Data Preview</button>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 style="margin:0; font-size:0.95rem; font-weight:600;">JSON Form Definition</h4>
+                <button class="btn-outline" onclick="copyBuilderJson()"><i class="bi bi-clipboard"></i> Salin JSON</button>
+            </div>
+            <textarea id="builder-json-output" readonly style="width:100%; min-height:260px; background:#020617; color:#dbeafe; border:1px solid var(--border); border-radius:14px; padding:14px; font-family: monospace; font-size:0.8rem;"></textarea>
+        </div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div id="page-settings" class="page container">
+        <div class="header">
+            <h1><i class="bi bi-sliders"></i> PENGATURAN AI HYBRID</h1>
+            <p>Konfigurasi API Key & Backup Data</p>
+        </div>
+        <div class="form-section">
+            <div class="setting-group">
+                <label>OpenAI API Key (Primary)</label>
+                <input type="password" id="api-openai" placeholder="sk-proj-..." onchange="updateApiStatusUI()">
+                <div class="api-status" id="status-openai"><span class="status-dot"></span> Belum dikonfigurasi</div>
+            </div>
+            <div class="setting-group">
+                <label>Gemini API Key (Fallback 1)</label>
+                <input type="password" id="api-gemini" placeholder="AIzaSy..." onchange="updateApiStatusUI()">
+                <div class="api-status" id="status-gemini"><span class="status-dot"></span> Belum dikonfigurasi</div>
+            </div>
+            <div class="setting-group">
+                <label>Mistral API Key (Fallback 2)</label>
+                <input type="password" id="api-mistral" placeholder="..." onchange="updateApiStatusUI()">
+                <div class="api-status" id="status-mistral"><span class="status-dot"></span> Belum dikonfigurasi</div>
+            </div>
+
+            <button class="btn-success" onclick="saveSettings()"><i class="bi bi-save"></i> Simpan Konfigurasi
+                API</button>
+            <button class="btn-outline" onclick="testAllApis()"><i class="bi bi-wifi"></i> Uji Koneksi Semua
+                Provider</button>
+            <div id="test-results" style="margin-top:12px; font-size:0.8rem; color:var(--text-muted)"></div>
+
+            <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <div class="result-title"><i class="bi bi-cloud-arrow-up-down"></i> BACKUP & RESTORE DATA</div>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px;">Unduh semua data SLS,
+                    history, dan API keys ke file JSON.</p>
+                <button class="btn-outline" onclick="backupData()"><i class="bi bi-download"></i> Export Backup
+                    (JSON)</button>
+                <button class="btn-outline" onclick="document.getElementById('restore-file').click()"><i
+                        class="bi bi-upload"></i> Import Restore (JSON)</button>
+                <input type="file" id="restore-file" accept=".json" style="display: none;" onchange="restoreData(this)">
+            </div>
+
+            <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <div class="result-title"><i class="bi bi-shield-lock"></i> KEAMANAN APLIKASI</div>
+                <div class="api-status" id="pin-status-display" style="margin-bottom:12px;"><span
+                        class="status-dot"></span> PIN Lock: Nonaktif</div>
+
+                <div class="setting-group">
+                    <label>PIN Baru (tepat 4 digit angka)</label>
+                    <input type="password" inputmode="numeric" maxlength="4" id="pin-new" placeholder="••••">
+                </div>
+                <div class="setting-group">
+                    <label>Konfirmasi PIN</label>
+                    <input type="password" inputmode="numeric" maxlength="4" id="pin-confirm" placeholder="••••">
+                </div>
+                <div class="setting-group">
+                    <label>Jawaban Pemulihan (dipakai jika lupa PIN)</label>
+                    <input type="text" id="pin-recovery" placeholder="mis. nama kecamatan, kode tim...">
+                </div>
+                <button class="btn-success" onclick="setupPin()"><i class="bi bi-lock-fill"></i> Aktifkan / Perbarui
+                    PIN</button>
+                <button class="btn-outline" id="btn-lock-now" onclick="lockAppNow()" style="display:none;"><i
+                        class="bi bi-lock"></i> Kunci Aplikasi Sekarang</button>
+                <button class="btn-danger" id="btn-disable-pin" onclick="disablePin()"
+                    style="display:none; width:100%; justify-content:center; margin-top:8px;"><i
+                        class="bi bi-unlock"></i> Nonaktifkan PIN Lock</button>
+
+                <div
+                    style="font-size:0.7rem; color:var(--text-muted); margin-top:10px; line-height:1.5; background:#0b1120; border:1px solid var(--border); border-radius:8px; padding:8px 10px;">
+                    <i class="bi bi-info-circle"></i> PIN ini adalah kunci akses cepat di perangkat (disimpan sebagai
+                    hash SHA-256, bukan teks asli).
+                </div>
+            </div>
+
+            <div class="app-info-box">
+                <div class="app-name" id="app-name-version">Saka Tracker v5.6.0 (Build 20260710)</div>
+                <div style="margin-bottom: 8px; font-size: 0.75rem;">Aplikasi monitoring progres SLS berbasis Hybrid AI
+                    dengan tracking termin dan komparasi muatan kontrak.</div>
+                <div
+                    style="margin-bottom: 8px; font-size: 0.68rem; color: var(--text-muted); background:#0b1120; border:1px solid var(--border); border-radius:8px; padding:6px 8px; text-align:left;">
+                    <strong style="color:var(--text-main); font-size:0.7rem;"><i class="bi bi-clock-history"></i>
+                        v5.6.0</strong> — Integrasi FormGear lokal di folder assets, perbaikan render form dinamis, dan pembaruan semver aplikasi
+                    Semantic Versioning terpadu, dan sinkronisasi versi otomatis antara halaman, Service Worker, dan
+                    manifest PWA.<br>
+                    <strong style="color:var(--text-main); font-size:0.7rem;"><i class="bi bi-clock-history"></i>
+                        v5.4.5</strong> — Penyempurnaan Terms of Service &amp; Privacy Policy, penambahan Consent Gate
+                    dan PIN Lock opsional.
+                </div>
+                <div style="font-weight: bold; color: var(--text-main); margin-bottom: 4px;">Developed by Saka_Omni
+                </div>
+
+                <div class="dev-contact">
+                    <a href="mailto:mlevian@protonmail.com" class="contact-btn"><i class="bi bi-envelope"></i> Email
+                        Developer</a>
+                    <a href="https://wa.me/6285111330391" target="_blank" class="contact-btn"><i
+                            class="bi bi-whatsapp"></i> WhatsApp Direct</a>
+                </div>
+
+                <div class="legal-links">
+                    <button class="legal-btn" onclick="openModal('tos')">Terms of Service</button>
+                    <button class="legal-btn" onclick="openModal('privacy')">Privacy Policy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL FOR LEGAL -->
+    <div id="legal-modal" class="modal-overlay" onclick="if(event.target === this) closeModal()">
+        <div class="modal-content">
+            <div class="modal-title" id="modal-title">Title</div>
+            <div class="modal-body" id="modal-body">Content</div>
+            <button class="btn-primary modal-close" onclick="closeModal()"><i class="bi bi-x-lg"></i> Tutup</button>
+        </div>
+    </div>
+
+    <!-- CONSENT GATE -->
+    <div id="consent-gate" class="full-gate">
+        <div class="gate-card">
+            <div style="font-size:2rem; text-align:center; color:var(--accent-blue);"><i class="bi bi-shield-check"></i>
+            </div>
+            <h2 style="text-align:center; margin:8px 0 2px; font-size:1.1rem;">Sebelum Melanjutkan</h2>
+            <p style="text-align:center; color:var(--text-muted); font-size:0.78rem; margin-bottom:12px;"
+                id="footer-tagline-version">Saka Tracker v5.6.0 — Alat bantu internal monitoring SE2026</p>
+            <div class="gate-scroll">
+                <p>Dengan melanjutkan, Anda menyetujui hal-hal berikut:</p>
+                <ul>
+                    <li>Aplikasi ini adalah <strong>alat bantu internal</strong>, bukan aplikasi resmi BPS.</li>
+                    <li>Seluruh data tersimpan <strong>lokal di perangkat Anda</strong> (localStorage).</li>
+                    <li><strong>Jangan</strong> memasukkan data pribadi responden sensus ke aplikasi ini.</li>
+                    <li>Fitur AI Insight (opsional) mengirim ringkasan angka agregat ke provider AI.</li>
+                    <li>Aplikasi disediakan apa adanya (as-is) tanpa jaminan.</li>
+                </ul>
+                <p>Baca selengkapnya: <button class="legal-btn" onclick="openModal('tos')"
+                        style="padding:2px 4px;">Terms of Service</button> &middot; <button class="legal-btn"
+                        onclick="openModal('privacy')" style="padding:2px 4px;">Privacy Policy</button></p>
+            </div>
+            <label class="consent-check-row">
+                <input type="checkbox" id="consent-checkbox"
+                    onchange="document.getElementById('btn-consent-agree').disabled = !this.checked">
+                Saya telah membaca dan menyetujui Terms of Service dan Privacy Policy di atas.
+            </label>
+            <button class="btn-primary" id="btn-consent-agree" disabled onclick="acceptConsent()"><i
+                    class="bi bi-check-lg"></i> Setuju &amp; Lanjutkan</button>
+        </div>
+    </div>
+
+    <!-- PIN LOCK SCREEN -->
+    <div id="pin-lock-screen" class="full-gate">
+        <div class="gate-card" style="text-align:center;">
+            <i class="bi bi-lock-fill" style="font-size:2rem; color:var(--accent-blue);"></i>
+            <h2 style="margin:8px 0 2px; font-size:1.1rem;">Terkunci</h2>
+            <p style="color:var(--text-muted); font-size:0.78rem;">Masukkan PIN untuk membuka Saka Tracker</p>
+            <div class="pin-dots" id="pin-dots"><span></span><span></span><span></span><span></span></div>
+            <div id="pin-error"></div>
+            <div class="pin-keypad">
+                <button class="pin-key" onclick="pinPress('1')">1</button>
+                <button class="pin-key" onclick="pinPress('2')">2</button>
+                <button class="pin-key" onclick="pinPress('3')">3</button>
+                <button class="pin-key" onclick="pinPress('4')">4</button>
+                <button class="pin-key" onclick="pinPress('5')">5</button>
+                <button class="pin-key" onclick="pinPress('6')">6</button>
+                <button class="pin-key" onclick="pinPress('7')">7</button>
+                <button class="pin-key" onclick="pinPress('8')">8</button>
+                <button class="pin-key" onclick="pinPress('9')">9</button>
+                <button class="pin-key empty"></button>
+                <button class="pin-key" onclick="pinPress('0')">0</button>
+                <button class="pin-key" onclick="pinBackspace()"><i class="bi bi-backspace"></i></button>
+            </div>
+            <button class="legal-btn" style="margin-top:14px;" onclick="showRecoveryFlow()">Lupa PIN?</button>
+            <div id="recovery-flow" style="display:none; margin-top:10px; text-align:left;">
+                <label style="font-size:0.75rem; color:var(--text-muted);">Jawaban pemulihan Anda</label>
+                <input type="text" id="recovery-answer-input" placeholder="Jawaban pemulihan..."
+                    style="margin-top:4px; width:100%; background:#0f172a; border:1px solid var(--border); color:white; padding:8px 12px; border-radius:8px;">
+                <button class="btn-success" style="margin-top:6px;" onclick="verifyRecovery()"><i class="bi bi-key"></i>
+                    Verifikasi</button>
+                <div id="recovery-msg" style="font-size:0.72rem; margin-top:4px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Install Banner (will show if PWA not installed) -->
+    <div class="install-banner" id="install-banner">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <i class="bi bi-cloud-download" style="font-size:1.5rem; color:var(--accent-blue);"></i>
+            <div>
+                <div style="font-weight:600; font-size:0.85rem;">Install Saka Tracker</div>
+                <div style="font-size:0.7rem; color:var(--text-muted);">Akses lebih cepat seperti aplikasi native</div>
+            </div>
+        </div>
+        <button class="btn-install" id="btn-install">Install</button>
+    </div>
+
+    <!-- BOTTOM NAVBAR -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchPage('dashboard')" aria-label="Dashboard">
+            <i class="bi bi-bar-chart-fill nav-icon"></i>
+            <span>Dashboard</span>
+        </button>
+        <button class="nav-item" onclick="switchPage('data')" aria-label="Data SLS">
+            <i class="bi bi-folder-fill nav-icon"></i>
+            <span>Data SLS</span>
+        </button>
+        <button class="nav-item" onclick="switchPage('history')" aria-label="History">
+            <i class="bi bi-clock-history nav-icon"></i>
+            <span>History</span>
+        </button>
+        <button class="nav-item" onclick="switchPage('formgear')" aria-label="FormGear">
+            <i class="bi bi-ui-checks-grid nav-icon"></i>
+            <span>FormGear</span>
+        </button>
+        <button class="nav-item" onclick="switchPage('formbuilder')" aria-label="Builder">
+            <i class="bi bi-hammer nav-icon"></i>
+            <span>Builder</span>
+        </button>
+        <button class="nav-item" onclick="switchPage('settings')" aria-label="Pengaturan">
+            <i class="bi bi-gear-fill nav-icon"></i>
+            <span>Pengaturan</span>
+        </button>
+    </nav>
+
+    <script>
+        // ===============================
+        // VERSI APLIKASI (SEMANTIC VERSIONING - semver.org)
+        // ===============================
+        // APP_VERSION adalah SATU-SATUNYA sumber kebenaran versi di dalam file ini.
+        // Setiap ada perubahan kode: naikkan MAJOR.MINOR.PATCH sesuai konvensi semver
+        // (MAJOR = perubahan tak-kompatibel, MINOR = fitur baru kompatibel,
+        // PATCH = perbaikan bug), lalu WAJIB samakan angka yang identik di:
+        //   - sw.js       -> SW_VERSION & CACHE_NAME
+        //   - manifest.json -> "version"
+        //   - SKILL.md    -> "Version documented"
+        //   - README.md   -> badge/judul versi
+        // Ketidaksesuaian antar file akan terdeteksi otomatis saat runtime dan
+        // dicatat sebagai console.warn (lihat checkVersionSync & checkManifestVersionSync).
+        const APP_VERSION = "5.6.0";
+        const BUILD_DATE = "20260710";
+        const LEGAL_VERSION = "5.4.5"; // versi dokumen ToS/Privacy - naik hanya saat isi legal berubah
+        const STORAGE_KEY = "saka_tracker_v5_4"; // kunci localStorage historis, tidak diubah agar data pengguna lama tetap kompatibel
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.title = 'Saka Tracker V' + APP_VERSION + ' - Stable';
+            const badge = document.getElementById('app-version-badge');
+            if (badge) badge.textContent = 'v' + APP_VERSION;
+            const appName = document.getElementById('app-name-version');
+            if (appName) appName.textContent = 'Saka Tracker v' + APP_VERSION + ' (Build ' + BUILD_DATE + ')';
+            const footerTag = document.getElementById('footer-tagline-version');
+            if (footerTag) footerTag.textContent = 'Saka Tracker v' + APP_VERSION + ' — Alat bantu internal monitoring SE2026';
+        });
+
+        // ===============================
+        // CONFIG & STATE MANAGEMENT
+        // ===============================
+        const CONFIG = {
+            startDate: new Date("2026-06-15"),
+            absoluteDeadline: new Date("2026-08-30"),
+            safetyBufferDays: 3,
+            termin1TargetDate: new Date("2026-07-13")
+        };
+        const clearanceDate = new Date(CONFIG.absoluteDeadline);
+        clearanceDate.setDate(clearanceDate.getDate() - CONFIG.safetyBufferDays);
+
+        const DEFAULT_SLS_DATA = [
+            { kode: "0012", nama: "RT 004 RW 03 DUSUN KARANG KOMIS", open: 61, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 81 },
+            { kode: "0013", nama: "RT 005 RW 03 DUSUN KARANG KOMIS", open: 44, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 51 },
+            { kode: "0014", nama: "RT 006 RW 03 DUSUN KARANG KOMIS", open: 48, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 53 },
+            { kode: "0015", nama: "RT 001 RW 04 DUSUN MASJID", open: 87, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 98 },
+            { kode: "0016", nama: "RT 002 RW 04 DUSUN MASJID", open: 50, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 61 },
+            { kode: "0017", nama: "RT 003 RW 04 DUSUN MASJID", open: 101, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 107 },
+            { kode: "0018", nama: "RT 004 RW 04 DUSUN MASJID", open: 125, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 178 },
+            { kode: "0019", nama: "RT 005 RW 04 DUSUN MASJID", open: 78, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 93 },
+            { kode: "0020", nama: "RT 006 RW 04 DUSUN MASJID", open: 81, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 91 }
+        ];
+
+        let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+            config: { assessment: 675, muatan: 813 },
+            dashboard: { open: 0, draft: 27, submit: 0, reject: 0, pending: 0, approve: 0 },
+            sls: JSON.parse(JSON.stringify(DEFAULT_SLS_DATA)),
+            history: [],
+            apiKeys: { openai: '', gemini: '', mistral: '' },
+            isAccumulationMode: false,
+            consent: { accepted: false, version: null, date: null },
+            security: { pinEnabled: false, pinHash: null, recoveryHash: null, failedAttempts: 0, lockUntil: null }
+        };
+
+        // ===============================
+        // HELPER FUNCTIONS
+        // ===============================
+        function getElapsedDays() {
+            const diffTime = Math.abs(new Date() - CONFIG.startDate);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+        }
+
+        function getSisaHariKeClearance() {
+            return Math.max(1, Math.ceil((clearanceDate - new Date()) / (1000 * 60 * 60 * 24)));
+        }
+
+        // ===============================
+        // SYNC FUNCTIONS - ASSESSMENT DINAMIS
+        // ===============================
+        function syncConfigTargets() {
+            let totalMuatan = 0;
+            let totalAssessment = 0;
+            let totalOpen = 0;
+            let totalSubmit = 0;
+            let totalApprove = 0;
+
+            state.sls.forEach(s => {
+                const open = parseInt(s.open) || 0;
+                const submit = parseInt(s.submit) || 0;
+                const approve = parseInt(s.approve) || 0;
+                const muatan = parseInt(s.muatan) || 0;
+
+                totalOpen += open;
+                totalSubmit += submit;
+                totalApprove += approve;
+                totalMuatan += muatan;
+                totalAssessment += open + submit + approve;
+            });
+
+            state.config.muatan = totalMuatan;
+            state.config.assessment = totalAssessment;
+            state.dashboard.open = totalOpen;
+            state.dashboard.submit = totalSubmit;
+            state.dashboard.approve = totalApprove;
+        }
+
+        function syncDashboardFromSLS() {
+            let totalSubmit = 0;
+            let totalApprove = 0;
+            let totalOpen = 0;
+            let totalReject = 0;
+            let totalPending = 0;
+
+            state.sls.forEach(s => {
+                totalOpen += parseInt(s.open) || 0;
+                totalSubmit += parseInt(s.submit) || 0;
+                totalApprove += parseInt(s.approve) || 0;
+                totalReject += parseInt(s.reject) || 0;
+                totalPending += parseInt(s.pending) || 0;
+            });
+
+            state.dashboard.open = totalOpen;
+            state.dashboard.submit = totalSubmit;
+            state.dashboard.approve = totalApprove;
+            state.dashboard.reject = totalReject;
+            state.dashboard.pending = totalPending;
+
+            syncConfigTargets();
+            updateHeaderStats();
+        }
+
+        // ===============================
+        // UPDATE HEADER STATS
+        // ===============================
+        function updateHeaderStats() {
+            document.getElementById('stat-open').textContent = state.dashboard.open;
+            document.getElementById('stat-submit').textContent = state.dashboard.submit;
+            document.getElementById('stat-approve').textContent = state.dashboard.approve;
+            document.getElementById('stat-muatan').textContent = state.config.muatan;
+        }
+
+        // ===============================
+        // ACCORDION TOGGLE
+        // ===============================
+        function toggleAccordion(el) {
+            el.classList.toggle('open');
+            const body = document.getElementById('accordion-body');
+            body.classList.toggle('open');
+        }
+
+        // ===============================
+        // INPUT LOGIC - APPROVE TIDAK DIVALIDASI
+        // ===============================
+        function toggleInputMode() {
+            const checkbox = document.getElementById('mode-akumulasi');
+            state.isAccumulationMode = checkbox.checked;
+            const dateDisplay = document.getElementById('date-range-display');
+            const toggleLabel = document.querySelector('.toggle-label');
+            if (state.isAccumulationMode) {
+                toggleLabel.innerHTML = '<i class="bi bi-calendar-range"></i> Mode Akumulasi (Rentang Tanggal)';
+                if (dateDisplay) dateDisplay.style.display = "block";
+            } else {
+                toggleLabel.innerHTML = '<i class="bi bi-calendar-event"></i> Mode Input Harian';
+                if (dateDisplay) dateDisplay.style.display = "none";
+            }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function updateSLS(idx, field, val) {
+            const num = parseInt(val);
+
+            if (isNaN(num) || num < 0) {
+                state.sls[idx][field] = 0;
+                if (event && event.target) event.target.value = 0;
+                return;
+            }
+
+            const oldVal = state.sls[idx][field];
+            const diff = num - oldVal;
+
+            if (field === 'submit') {
+                const maxSubmit = state.sls[idx].open + oldVal;
+                if (num > maxSubmit) {
+                    showAlert('Peringatan: Submit tidak boleh melebihi Open (' + state.sls[idx].open + ')');
+                    if (event && event.target) event.target.value = oldVal;
+                    return;
+                }
+                state.sls[idx].open -= diff;
+                if (state.sls[idx].open < 0) {
+                    state.sls[idx].open = 0;
+                }
+            }
+
+            // APPROVE TIDAK DIVALIDASI - bisa lebih besar dari Submit atau Open
+            if (field === 'approve') {
+                // Approve tidak perlu validasi apapun
+                // Open TIDAK berkurang otomatis dari approve
+            }
+
+            state.sls[idx][field] = num;
+
+            syncConfigTargets();
+            updateHeaderStats();
+
+            if (field === 'submit' && diff !== 0) {
+                const openInput = document.querySelectorAll('#sls-inputs-container input')[idx * 5];
+                if (openInput) {
+                    openInput.value = state.sls[idx].open;
+                }
+            }
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        // ===============================
+        // CORE LOGIC - PROGRESS = SUBMIT + APPROVE
+        // ===============================
+        function getProgress() {
+            const p = state.dashboard.submit + state.dashboard.approve;
+            const assessment = state.config.assessment;
+            return {
+                val: p,
+                dashP: assessment > 0 ? (p / assessment) * 100 : 0,
+                muatanP: state.config.muatan > 0 ? (p / state.config.muatan) * 100 : 0,
+                open: state.dashboard.open,
+                submit: state.dashboard.submit,
+                approve: state.dashboard.approve,
+                assessment: assessment
+            };
+        }
+
+        function getVelocity() {
+            if (state.history.length >= 7) {
+                const last7Days = state.history.slice(-7);
+                const first = last7Days[0].progress;
+                const last = last7Days[last7Days.length - 1].progress;
+                const diff = last - first;
+                if (diff > 0) return Math.ceil(diff / 6);
+            }
+            const elapsedDays = getElapsedDays();
+            const currentProg = getProgress().val;
+            return Math.ceil(currentProg / Math.max(1, elapsedDays));
+        }
+
+        function prioritasSLS() {
+            return [...state.sls].map(item => {
+                const prog = item.submit + item.approve;
+                const total = item.open + prog;
+                const persen = total === 0 ? 0 : (prog / total) * 100;
+
+                const openScore = Math.min(item.open * 0.8, 40);
+                const approveScore = item.approve * 0.3;
+                const submitScore = item.submit * 0.1;
+                const muatanFactor = item.muatan ? (item.muatan / 100) : 1;
+
+                const score = (openScore + approveScore + submitScore) * muatanFactor;
+
+                let action = 'Monitor';
+                let actionClass = 'action-lanjut';
+                let actionIcon = 'bi-eye-fill';
+                if (persen >= 100) {
+                    action = 'Selesai';
+                    actionClass = 'action-done';
+                    actionIcon = 'bi-check-circle-fill';
+                } else if (item.open > 50 && persen < 30) {
+                    action = 'URGENT!';
+                    actionClass = 'action-urgent';
+                    actionIcon = 'bi-exclamation-triangle-fill';
+                } else if (item.open > 30 && persen < 50) {
+                    action = 'Prioritas Tinggi';
+                    actionClass = 'action-urgent';
+                    actionIcon = 'bi-flag-fill';
+                } else if (persen > 0) {
+                    action = 'Lanjutkan';
+                    actionClass = 'action-lanjut';
+                    actionIcon = 'bi-arrow-right-circle-fill';
+                } else {
+                    action = 'Mulai';
+                    actionClass = 'action-mulai';
+                    actionIcon = 'bi-play-circle-fill';
+                }
+
+                return { ...item, score, persen, prog, action, actionClass, actionIcon };
+            }).sort((a, b) => b.score - a.score);
+        }
+
+        function performanceGrade(dashP) {
+            const elapsedDays = getElapsedDays();
+            const totalDays = Math.ceil((CONFIG.absoluteDeadline - CONFIG.startDate) / (1000 * 60 * 60 * 24));
+            const expectedProgress = (elapsedDays / totalDays) * 100;
+            const delta = dashP - expectedProgress;
+            let grade, desc, color, icon;
+            if (dashP >= 80 && delta > 10) { grade = 'A+'; desc = 'Excellent'; color = 'var(--accent-green)'; icon = 'bi-trophy-fill'; }
+            else if (dashP >= 70 && delta > 5) { grade = 'A'; desc = 'Luar Biasa'; color = 'var(--accent-green)'; icon = 'bi-star-fill'; }
+            else if (dashP >= 60 && delta >= 0) { grade = 'B'; desc = 'Baik & On Track'; color = '#3b82f6'; icon = 'bi-check-circle-fill'; }
+            else if (dashP >= 50 && delta >= -5) { grade = 'C'; desc = 'Sedang, Perlu Percepatan'; color = 'var(--accent-orange)'; icon = 'bi-exclamation-triangle-fill'; }
+            else if (dashP >= 40 && delta >= -10) { grade = 'D'; desc = 'Di Bawah Target'; color = '#f59e0b'; icon = 'bi-graph-down'; }
+            else { grade = 'E'; desc = 'Kritis! Butuh Aksi Cepat'; color = 'var(--accent-red)'; icon = 'bi-exclamation-octagon-fill'; }
+            return { g: grade, d: desc, c: color, icon: icon, delta: delta.toFixed(1) };
+        }
+
+        function generateSLSDetail(slsItem, rank) {
+            const status = slsItem.persen === 100 ? 'selesai' : slsItem.prog > 0 ? 'sedang berjalan' : 'belum dimulai';
+            let strategy = '';
+            if (rank <= 3) strategy = '<i class="bi bi-exclamation-circle-fill" style="color:var(--accent-red);"></i> PRIORITAS UTAMA. Fokuskan resource untuk menutup ' + slsItem.open + ' item open tersisa.';
+            else if (slsItem.open > 80) strategy = '<i class="bi bi-bar-chart-fill"></i> Volume open sangat tinggi (' + slsItem.open + '). Butuh delegasi agar tidak jadi bottleneck.';
+            else if (slsItem.persen < 20) strategy = '<i class="bi bi-hourglass-split"></i> Progress rendah (' + slsItem.persen.toFixed(0) + '%). Mulai percepatan dengan pendekatan door-to-door.';
+            else strategy = '<i class="bi bi-pin-angle-fill"></i> Status: ' + status + '. Lakukan monitoring mingguan.';
+            return '<strong>Kode:</strong> ' + slsItem.kode + ' | <strong>Alamat:</strong> ' + slsItem.nama + '<br>' +
+                '<strong>Detail:</strong> Open: ' + slsItem.open + ', Submit: ' + slsItem.submit + ', Approve: ' + slsItem.approve + '<br>' +
+                '<strong>Progress:</strong> ' + slsItem.persen.toFixed(0) + '% (' + slsItem.prog + ' dari ' + (slsItem.open + slsItem.prog) + ')<br><br>' +
+                '<strong><i class="bi bi-bullseye"></i> Strategi AI:</strong> ' + strategy;
+        }
+
+        // ===============================
+        // RENDER FUNCTIONS
+        // ===============================
+        function renderTerminAlert(prog) {
+            const card = document.getElementById('termin-alert-card');
+            const statusDiv = document.getElementById('termin-status');
+            const today = new Date();
+            const targetDate = CONFIG.termin1TargetDate;
+            const isPastDeadline = today > targetDate;
+            const isTargetMet = prog.dashP >= 40;
+
+            const daysLeft = Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+            const targetProgress = 40;
+            const targetFinal = 100;
+            const currentProgress = prog.dashP;
+            const gapToTarget = Math.max(0, targetProgress - currentProgress);
+            const gapToFinal = Math.max(0, targetFinal - currentProgress);
+            const progressPerDay = daysLeft > 0 ? gapToTarget / daysLeft : 0;
+
+            const totalData = state.config.assessment;
+            const currentData = prog.val;
+            const target40Data = Math.ceil(totalData * 0.4);
+            const target100Data = totalData;
+            const gapDataTo40 = Math.max(0, target40Data - currentData);
+            const gapDataTo100 = Math.max(0, target100Data - currentData);
+            const dataPerDayTo40 = daysLeft > 0 ? Math.ceil(gapDataTo40 / daysLeft) : 0;
+            const currVel = getVelocity();
+            const sisaHariKeClearance = getSisaHariKeClearance();
+            const dataPerDayTo100 = sisaHariKeClearance > 0 ? Math.ceil(gapDataTo100 / sisaHariKeClearance) : 0;
+            const estimatedDaysTo40 = currVel > 0 ? Math.ceil(gapDataTo40 / currVel) : Infinity;
+            const estimatedDaysTo100 = currVel > 0 ? Math.ceil(gapDataTo100 / currVel) : Infinity;
+
+            card.style.display = 'block';
+
+            if (!isTargetMet) {
+                let statusHTML = '';
+                if (isPastDeadline) {
+                    statusHTML = `<div class="forecast-box forecast-crit" style="flex-direction:column; align-items:stretch; gap:10px;">
+                <div style="display:flex; align-items:center; gap:10px; font-size:1rem;">
+                    <i class="bi bi-exclamation-octagon-fill" style="font-size:1.3rem; color:var(--accent-red);"></i>
+                    <strong style="color:var(--accent-red);">KRITIS! Termin 1 GAGAL</strong>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:0.85rem; background:#0f172a; padding:8px; border-radius:8px;">
+                    <div><i class="bi bi-graph-up"></i> Progress:</div>
+                    <div style="font-weight:bold; color:var(--accent-red);">${currentProgress.toFixed(2)}% (${currentData} data)</div>
+                    <div><i class="bi bi-bullseye"></i> Target 40%:</div>
+                    <div style="font-weight:bold; color:var(--accent-red);">${target40Data} data</div>
+                    <div><i class="bi bi-calendar-event"></i> Deadline:</div>
+                    <div style="font-weight:bold;">${targetDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                    <div><i class="bi bi-clock"></i> Keterlambatan:</div>
+                    <div style="font-weight:bold; color:var(--accent-red);">${Math.abs(daysLeft)} hari</div>
+                </div>
+                <div style="background:rgba(239,68,68,0.15); padding:8px; border-radius:8px; text-align:center; font-weight:bold; color:var(--accent-red); font-size:0.85rem;">
+                    <i class="bi bi-lightning-fill"></i> SEGERA PERCEPAT APPROVAL! Target tidak tercapai tepat waktu.
+                </div>
+            </div>`;
+                } else if (daysLeft <= 3 && currentProgress < 30) {
+                    statusHTML = `<div class="forecast-box forecast-crit" style="flex-direction:column; align-items:stretch; gap:10px;">
+                <div style="display:flex; align-items:center; gap:10px; font-size:1rem;">
+                    <i class="bi bi-exclamation-octagon-fill" style="font-size:1.3rem; color:var(--accent-red);"></i>
+                    <strong style="color:var(--accent-red);">KRITIS! Hanya ${daysLeft} Hari Tersisa!</strong>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:0.85rem; background:#0f172a; padding:8px; border-radius:8px;">
+                    <div><i class="bi bi-graph-up"></i> Progress:</div>
+                    <div style="font-weight:bold; color:var(--accent-orange);">${currentProgress.toFixed(2)}% (${currentData} data)</div>
+                    <div><i class="bi bi-bullseye"></i> Target 40%:</div>
+                    <div style="font-weight:bold; color:var(--accent-orange);">${target40Data} data</div>
+                    <div><i class="bi bi-arrow-up-circle"></i> Gap ke 40%:</div>
+                    <div style="font-weight:bold; color:var(--accent-red);">${gapDataTo40} data (${gapToTarget.toFixed(1)}%)</div>
+                    <div><i class="bi bi-calendar-event"></i> Sisa Hari:</div>
+                    <div style="font-weight:bold; color:var(--accent-red);">${daysLeft} hari</div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:#0f172a; padding:8px; border-radius:8px;">
+                    <div style="text-align:center;">
+                        <div style="color:var(--text-muted); font-size:0.65rem;"><i class="bi bi-speedometer2"></i> Butuh/hari (40%)</div>
+                        <div style="font-weight:bold; font-size:1.1rem; color:var(--accent-red);">${dataPerDayTo40} data</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted);">(${progressPerDay.toFixed(1)}%)</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="color:var(--text-muted); font-size:0.65rem;"><i class="bi bi-graph-up-arrow"></i> Ritme Saat Ini</div>
+                        <div style="font-weight:bold; font-size:1.1rem; color:${currVel >= dataPerDayTo40 ? 'var(--accent-green)' : 'var(--accent-red)'};">${currVel} data/hari</div>
+                        <div style="font-size:0.65rem; color:${currVel >= dataPerDayTo40 ? 'var(--accent-green)' : 'var(--accent-red)'};">${currVel >= dataPerDayTo40 ? '<i class="bi bi-check-circle-fill"></i> Cukup' : '<i class="bi bi-x-circle-fill"></i> Kurang ' + (dataPerDayTo40 - currVel) + ' data/hari'}</div>
+                    </div>
+                </div>
+                <div style="background:rgba(59,130,246,0.08); padding:8px; border-radius:8px; border-left:3px solid var(--accent-blue);">
+                    <div style="font-weight:bold; margin-bottom:4px; font-size:0.8rem;"><i class="bi bi-flag-fill"></i> Target Final 100%</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:0.8rem;">
+                        <div><i class="bi bi-arrow-up-circle"></i> Gap: <strong style="color:var(--accent-blue);">${gapDataTo100} data (${gapToFinal.toFixed(1)}%)</strong></div>
+                        <div><i class="bi bi-speedometer2"></i> Butuh/hari: <strong style="color:${dataPerDayTo100 > 15 ? 'var(--accent-red)' : 'var(--accent-orange)'};">${dataPerDayTo100} data</strong></div>
+                        <div style="grid-column:1/-1;"><i class="bi bi-clock"></i> Estimasi selesai: <strong style="color:${estimatedDaysTo100 <= sisaHariKeClearance ? 'var(--accent-green)' : 'var(--accent-red)'};">${estimatedDaysTo100 === Infinity ? '∞' : estimatedDaysTo100 + ' hari'}</strong></div>
+                    </div>
+                </div>
+                <div style="background:rgba(239,68,68,0.1); padding:8px; border-radius:8px; text-align:center; font-size:0.85rem;">
+                    <i class="bi bi-lightning-fill" style="color:var(--accent-orange);"></i> Butuh <strong style="color:var(--accent-red);">${dataPerDayTo40} data/hari</strong> untuk mencapai 40%! Fokus di 3 SLS prioritas dengan open tinggi.
+                </div>
+            </div>`;
+                } else if (daysLeft <= 7) {
+                    const statusText = currentProgress > 30 ? 'Perlu AKSI CEPAT' : 'Kondisi KRITIS!';
+                    const borderColor = currentProgress > 30 ? 'var(--accent-orange)' : 'var(--accent-red)';
+                    statusHTML = `<div class="forecast-box forecast-warn" style="flex-direction:column; align-items:stretch; gap:10px; border-left:4px solid ${borderColor};">
+                <div style="display:flex; align-items:center; gap:10px; font-size:1rem;">
+                    <i class="bi bi-exclamation-triangle-fill" style="font-size:1.3rem; color:${borderColor};"></i>
+                    <strong style="color:${borderColor};">${daysLeft} Hari Menuju Termin 1 - ${statusText}</strong>
+                </div>
+                <div style="background:#1e293b; border-radius:8px; padding:10px;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+                        <span><i class="bi bi-graph-up"></i> Progress: ${currentProgress.toFixed(1)}% (${currentData} data)</span>
+                        <span><i class="bi bi-bullseye"></i> Target 40%: ${target40Data} data</span>
+                    </div>
+                    <div style="background:#334155; border-radius:4px; height:22px; overflow:hidden; position:relative;">
+                        <div style="background:${currentProgress > 35 ? 'var(--accent-green)' : currentProgress > 30 ? 'var(--accent-orange)' : 'var(--accent-red)'}; height:100%; width:${Math.min(100, currentProgress)}%; transition:width 0.5s ease;"></div>
+                        <div style="position:absolute; right:0; top:0; height:100%; width:${Math.max(0, 40 - currentProgress)}%; background:rgba(255,255,255,0.05); border-left:2px dashed var(--accent-orange);"></div>
+                        <div style="position:absolute; left:40%; top:50%; transform:translate(-50%, -50%); font-size:0.55rem; font-weight:bold; color:white; text-shadow:0 0 4px rgba(0,0,0,0.8);"><i class="bi bi-bullseye"></i> 40%</div>
+                        <div style="position:absolute; left:${Math.min(100, currentProgress)}%; top:50%; transform:translate(-50%, -50%); font-size:0.55rem; font-weight:bold; color:white; text-shadow:0 0 4px rgba(0,0,0,0.8);">${currentProgress.toFixed(0)}%</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--text-muted); margin-top:2px;">
+                        <span>Saat Ini (${currentData} data)</span>
+                        <span style="color:var(--accent-orange);"><i class="bi bi-arrow-up"></i> Gap ${gapDataTo40} data (${gapToTarget.toFixed(1)}%)</span>
+                        <span>Target 40%</span>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; font-size:0.8rem;">
+                    <div style="background:#0f172a; padding:6px; border-radius:6px; text-align:center;">
+                        <div style="color:var(--text-muted); font-size:0.65rem;"><i class="bi bi-calendar-range"></i> Sisa Hari</div>
+                        <div style="font-weight:bold; font-size:1rem; ${daysLeft <= 5 ? 'color:var(--accent-red)' : 'color:var(--accent-orange)'}">${daysLeft}</div>
+                    </div>
+                    <div style="background:#0f172a; padding:6px; border-radius:6px; text-align:center;">
+                        <div style="color:var(--text-muted); font-size:0.65rem;"><i class="bi bi-arrow-up-circle"></i> Gap ke 40%</div>
+                        <div style="font-weight:bold; font-size:1rem; color:var(--accent-orange);">${gapDataTo40} data</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted);">(${gapToTarget.toFixed(1)}%)</div>
+                    </div>
+                    <div style="background:#0f172a; padding:6px; border-radius:6px; text-align:center;">
+                        <div style="color:var(--text-muted); font-size:0.65rem;"><i class="bi bi-speedometer2"></i> Butuh/hari</div>
+                        <div style="font-weight:bold; font-size:1rem; ${dataPerDayTo40 > 5 ? 'color:var(--accent-red)' : 'color:var(--accent-orange)'}">${dataPerDayTo40} data</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted);">(${progressPerDay.toFixed(1)}%)</div>
+                    </div>
+                </div>
+                <div style="background:rgba(59,130,246,0.06); padding:8px; border-radius:8px; border-left:3px solid var(--accent-blue);">
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; font-size:0.75rem;">
+                        <div><div style="color:var(--text-muted);"><i class="bi bi-flag-fill"></i> Target 100%</div><div style="font-weight:bold;">${target100Data} data</div></div>
+                        <div><div style="color:var(--text-muted);"><i class="bi bi-arrow-up-circle"></i> Gap</div><div style="font-weight:bold; color:var(--accent-blue);">${gapDataTo100} data</div></div>
+                        <div><div style="color:var(--text-muted);"><i class="bi bi-speedometer2"></i> Butuh/hari</div><div style="font-weight:bold; color:${dataPerDayTo100 > 15 ? 'var(--accent-red)' : 'var(--accent-orange)'};">${dataPerDayTo100} data</div></div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:4px; padding-top:4px; border-top:1px solid var(--border);">
+                        <span><i class="bi bi-clock"></i> Estimasi Selesai (ritme ${currVel}/hari)</span>
+                        <span style="font-weight:bold; color:${estimatedDaysTo100 <= sisaHariKeClearance ? 'var(--accent-green)' : 'var(--accent-red)'};">${estimatedDaysTo100 === Infinity ? '∞ (belum ada ritme)' : estimatedDaysTo100 + ' hari'}</span>
+                    </div>
+                </div>
+                <div style="background:rgba(59,130,246,0.08); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border-left:3px solid var(--accent-blue);">
+                    <i class="bi bi-lightbulb-fill" style="color:var(--accent-blue);"></i> <strong>Strategi:</strong> Percepat approval di 3 SLS prioritas (0018, 0019, 0020). ${dataPerDayTo40 > 5 ? '<i class="bi bi-exclamation-triangle-fill" style="color:var(--accent-red);"></i> Perlu tambahan tenaga lapangan!' : 'Fokus pada SLS dengan open > 50 unit.'} ${dataPerDayTo40 > currVel ? ' Butuh tambahan <strong>' + (dataPerDayTo40 - currVel) + ' data/hari</strong> dari ritme saat ini.' : ''}
+                </div>
+            </div>`;
+                } else {
+                    statusHTML = `<div class="forecast-box forecast-warn" style="flex-direction:column; align-items:stretch; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <i class="bi bi-info-circle-fill" style="color:var(--accent-orange); font-size:1.2rem;"></i>
+                    <span style="font-size:0.85rem;"><i class="bi bi-calendar-event"></i> Termin 1: ${daysLeft} hari menuju deadline <strong>${targetDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</strong></span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:0.8rem; background:#0f172a; padding:8px; border-radius:8px;">
+                    <div><i class="bi bi-graph-up"></i> Progress: <strong style="color:var(--accent-blue);">${currentProgress.toFixed(2)}% (${currentData} data)</strong></div>
+                    <div><i class="bi bi-bullseye"></i> Target 40%: <strong style="color:var(--accent-green);">${target40Data} data</strong></div>
+                    <div><i class="bi bi-arrow-up-circle"></i> Gap ke 40%: <strong style="color:var(--accent-orange);">${gapDataTo40} data (${gapToTarget.toFixed(1)}%)</strong></div>
+                    <div><i class="bi bi-speedometer2"></i> Butuh/hari: <strong style="color:${dataPerDayTo40 > 3 ? 'var(--accent-orange)' : 'var(--accent-green)'};">${dataPerDayTo40} data (${progressPerDay.toFixed(1)}%)</strong></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:0.75rem; background:#0f172a; padding:6px; border-radius:8px;">
+                    <div><i class="bi bi-flag-fill"></i> Target 100%: <strong>${target100Data} data</strong></div>
+                    <div><i class="bi bi-arrow-up-circle"></i> Gap ke 100%: <strong style="color:var(--accent-blue);">${gapDataTo100} data (${gapToFinal.toFixed(1)}%)</strong></div>
+                    <div><i class="bi bi-speedometer2"></i> Butuh/hari (100%): <strong style="color:${dataPerDayTo100 > 15 ? 'var(--accent-red)' : 'var(--accent-orange)'};">${dataPerDayTo100} data</strong></div>
+                    <div><i class="bi bi-clock"></i> Estimasi selesai: <strong style="color:${estimatedDaysTo100 <= sisaHariKeClearance ? 'var(--accent-green)' : 'var(--accent-red)'};">${estimatedDaysTo100 === Infinity ? '∞' : estimatedDaysTo100 + ' hari'}</strong></div>
+                </div>
+                ${dataPerDayTo40 > 2 ? '<div style="font-size:0.75rem; color:var(--accent-orange); text-align:center;"><i class="bi bi-exclamation-triangle-fill"></i> Perlu percepatan! Target harian di atas 2% (' + dataPerDayTo40 + ' data/hari)</div>' : ''}
+            </div>`;
+                }
+                statusDiv.innerHTML = statusHTML;
+            } else {
+                const gapToFinalData = target100Data - currentData;
+                const daysToClearance = getSisaHariKeClearance();
+                const dataPerDayToFinal = daysToClearance > 0 ? Math.ceil(gapToFinalData / daysToClearance) : 0;
+                statusDiv.innerHTML = `<div class="forecast-box forecast-ok" style="flex-direction:column; align-items:stretch; gap:8px;">
+            <div style="display:flex; align-items:center; gap:10px; font-size:1rem;">
+                <i class="bi bi-check-circle-fill" style="color:var(--accent-green); font-size:1.3rem;"></i>
+                <strong style="color:var(--accent-green);">TERMIN 1 TERCAPAI! (40%)</strong>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:0.85rem; background:#0f172a; padding:8px; border-radius:8px;">
+                <div><i class="bi bi-graph-up"></i> Progress: <strong style="color:var(--accent-green);">${currentProgress.toFixed(2)}% (${currentData} data)</strong></div>
+                <div><i class="bi bi-bullseye"></i> Target 40%: <strong style="color:var(--accent-green);"><i class="bi bi-check-circle-fill"></i> ${target40Data} data</strong></div>
+                <div><i class="bi bi-calendar-event"></i> Deadline: <strong>${targetDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</strong></div>
+                <div><i class="bi bi-clock"></i> Selesai: <strong style="color:var(--accent-green);">${daysLeft < 0 ? Math.abs(daysLeft) + ' hari lebih cepat' : 'Tepat waktu'}</strong></div>
+            </div>
+            <div style="background:rgba(16,185,129,0.08); padding:8px; border-radius:8px; border-left:3px solid var(--accent-green);">
+                <div style="font-weight:bold; margin-bottom:4px; font-size:0.8rem;"><i class="bi bi-flag-fill"></i> Target Final 100%</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:0.8rem;">
+                    <div><i class="bi bi-arrow-up-circle"></i> Gap ke 100%: <strong style="color:var(--accent-blue);">${gapToFinalData} data (${gapToFinal.toFixed(1)}%)</strong></div>
+                    <div><i class="bi bi-speedometer2"></i> Butuh/hari (100%): <strong style="color:${dataPerDayToFinal > 15 ? 'var(--accent-red)' : 'var(--accent-orange)'};">${dataPerDayToFinal} data</strong></div>
+                    <div><i class="bi bi-graph-up"></i> Ritme Saat Ini: <strong style="color:${currVel >= dataPerDayToFinal ? 'var(--accent-green)' : 'var(--accent-orange)'};">${currVel} data/hari</strong></div>
+                    <div><i class="bi bi-clock"></i> Estimasi Selesai: <strong style="color:${estimatedDaysTo100 <= daysToClearance ? 'var(--accent-green)' : 'var(--accent-red)'};">${estimatedDaysTo100 === Infinity ? '∞' : estimatedDaysTo100 + ' hari'}</strong></div>
+                </div>
+            </div>
+            <div style="background:rgba(16,185,129,0.08); padding:6px; border-radius:8px; text-align:center; font-size:0.8rem; color:var(--text-muted);">
+                <i class="bi bi-rocket-takeoff"></i> Pertahankan ritme untuk clearance 27 Agustus 2026!
+                ${currVel < dataPerDayToFinal ? ' Perlu tambahan <strong>' + (dataPerDayToFinal - currVel) + ' data/hari</strong> untuk mencapai 100% tepat waktu.' : ''}
+            </div>
+        </div>`;
+            }
+        }
+
+        function renderForecast() {
+            const prog = getProgress();
+            const sisaHari = getSisaHariKeClearance();
+            const remaining = state.config.assessment - prog.val;
+            const reqVel = Math.ceil(remaining / sisaHari);
+            const currVel = getVelocity();
+            const isOnTrack = currVel >= reqVel;
+            const dateStr = clearanceDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+            const statusDiv = document.getElementById('forecast-status');
+            const detailDiv = document.getElementById('forecast-details');
+            let boxClass, icon, text;
+            if (currVel === 0) {
+                boxClass = 'forecast-crit';
+                icon = '<i class="bi bi-x-octagon-fill"></i>';
+                text = 'BELUM ADA RITME: Butuh ' + reqVel + ' data/hari untuk clearance ' + dateStr;
+                detailDiv.innerHTML = 'Belum ada progress yang tercatat. Mulai input data harian untuk tracking yang akurat.';
+            } else if (isOnTrack) {
+                boxClass = 'forecast-ok';
+                icon = '<i class="bi bi-check-circle-fill"></i>';
+                text = 'ON TRACK: Clearance aman sebelum ' + dateStr;
+                const estimatedDays = Math.ceil(remaining / currVel);
+                const bufferDays = sisaHari - estimatedDays;
+                detailDiv.innerHTML = 'Ritme <strong>' + currVel + ' data/hari</strong> cukup. Estimasi selesai: <strong>' + estimatedDays + ' hari</strong> (buffer ' + (bufferDays > 0 ? bufferDays : 0) + ' hari).';
+            } else {
+                boxClass = currVel >= reqVel * 0.7 ? 'forecast-warn' : 'forecast-crit';
+                icon = currVel >= reqVel * 0.7 ? '<i class="bi bi-exclamation-triangle-fill"></i>' : '<i class="bi bi-x-octagon-fill"></i>';
+                text = currVel >= reqVel * 0.7 ? 'WARNING: Margin tipis untuk clearance ' + dateStr : 'CRITICAL: Tidak mencapai clearance ' + dateStr;
+                const estimatedDays = Math.ceil(remaining / currVel);
+                const keterlambatan = estimatedDays - sisaHari;
+                detailDiv.innerHTML = 'Kekurangan ritme: <strong>' + (reqVel - currVel) + ' data/hari</strong>. Estimasi selesai: <strong>' + estimatedDays + ' hari</strong> (terlambat ' + (keterlambatan > 0 ? keterlambatan : 0) + ' hari).';
+            }
+            statusDiv.innerHTML = '<div class="forecast-box ' + boxClass + '">' + icon + ' ' + text + '</div>';
+        }
+
+        function renderTargetsAndComparison(prog) {
+            document.getElementById('comp-dash-persen').innerText = prog.dashP.toFixed(2) + '%';
+            document.getElementById('comp-muatan-persen').innerText = prog.muatanP.toFixed(2) + '%';
+            const sisaHari = getSisaHariKeClearance();
+            const remaining = state.config.assessment - prog.val;
+            const reqVel = Math.ceil(remaining / sisaHari);
+            const currVel = getVelocity();
+            document.getElementById('curr-velocity').innerText = currVel + ' data/hari';
+            document.getElementById('req-velocity').innerText = reqVel + ' data/hari';
+        }
+
+        function renderDifferenceAnalysis() {
+            const baselineAssessment = 675, baselineMuatan = 813;
+            const currentAssessment = state.config.assessment, currentMuatan = state.config.muatan;
+            const diffAssessment = currentAssessment - baselineAssessment;
+            const diffMuatan = currentMuatan - baselineMuatan;
+            const box = document.getElementById('diff-analysis-box');
+            const diffAssEl = document.getElementById('diff-assessment');
+            const diffMutEl = document.getElementById('diff-muatan');
+            if (diffAssessment !== 0 || diffMuatan !== 0) {
+                box.style.display = 'block';
+                const formatDiff = (val) => {
+                    if (val > 0) return '<span style="color:var(--accent-green)">+' + val + ' unit</span>';
+                    if (val < 0) return '<span style="color:var(--accent-red)">' + val + ' unit</span>';
+                    return '0 unit';
+                };
+                diffAssEl.innerHTML = formatDiff(diffAssessment);
+                diffMutEl.innerHTML = formatDiff(diffMuatan);
+            } else {
+                box.style.display = 'none';
+            }
+        }
+
+        function renderPriorityAccordions() {
+            const list = prioritasSLS();
+            const container = document.getElementById('priority-list');
+            container.innerHTML = '';
+            list.forEach((s, i) => {
+                const item = document.createElement('div');
+                item.className = 'priority-item';
+                item.innerHTML = `<div class="priority-header" onclick="toggleDetail(this)">
+            <div style="display:flex; align-items:center;">
+                <div class="p-rank">${i + 1}</div>
+                <div class="p-info">
+                    <div class="p-code">${s.kode}</div>
+                    <div class="p-score">Score: ${s.score.toFixed(0)} | Prog: ${s.persen.toFixed(0)}%</div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span class="p-action ${s.actionClass}"><i class="bi ${s.actionIcon}"></i> ${s.action}</span>
+                <i class="bi bi-chevron-down toggle-icon"></i>
+            </div>
+        </div>
+        <div class="priority-detail"><div class="detail-content">${generateSLSDetail(s, i + 1)}</div></div>`;
+                container.appendChild(item);
+            });
+        }
+
+        function toggleDetail(headerEl) {
+            const item = headerEl.parentElement;
+            const detail = item.querySelector('.priority-detail');
+            item.classList.toggle('expanded');
+            detail.classList.toggle('open');
+        }
+
+        function renderPerformance(prog, perf) {
+            const gradeEl = document.getElementById('perf-grade');
+            gradeEl.innerText = perf.g;
+            gradeEl.style.color = perf.c;
+            document.getElementById('perf-desc').innerHTML = '<i class="bi ' + perf.icon + '"></i> ' + perf.d;
+            document.getElementById('perf-delta').innerHTML = '<i class="bi bi-bar-chart-fill"></i> ' + (perf.delta > 0 ? 'Di atas target' : 'Di bawah target') + ' ' + Math.abs(perf.delta) + '%';
+            document.getElementById('dash-persen').innerText = prog.dashP.toFixed(2) + '%';
+            document.getElementById('dash-bar').style.width = Math.min(100, prog.dashP) + '%';
+        }
+
+        // ===============================
+        // AI INSIGHT - CLEAN MARKDOWN
+        // ===============================
+        function cleanAIResponse(text) {
+            if (!text) return '<p style="color:var(--text-muted); font-style:italic;">Tidak ada insight yang dihasilkan.</p>';
+
+            // Replace markdown headers
+            let cleaned = text
+                .replace(/^####\s+(.*)$/gm, '<h4>$1</h4>')
+                .replace(/^###\s+(.*)$/gm, '<h4>$1</h4>')
+                .replace(/^##\s+(.*)$/gm, '<h4>$1</h4>')
+                .replace(/^#\s+(.*)$/gm, '<h4>$1</h4>')
+                // Bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Italic
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Lists
+                .replace(/^-\s+(.*)$/gm, '<li>$1</li>')
+                .replace(/^\d+\.\s+(.*)$/gm, '<li>$1</li>')
+                // Wrap lists
+                .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                // Line breaks
+                .replace(/\n/g, '<br>');
+
+            // Wrap sections
+            cleaned = cleaned.replace(/<h4>([^<]+)<\/h4>/g, (match, title) => {
+                const isRisk = title.toLowerCase().includes('risiko') || title.toLowerCase().includes('risk');
+                const isSuccess = title.toLowerCase().includes('rekomendasi') || title.toLowerCase().includes('strategi');
+                const cls = isRisk ? 'risk' : isSuccess ? 'success' : '';
+                return `<div class="ai-section ${cls}"><h4>${title}</h4>`;
+            });
+
+            // Close ai-section divs
+            cleaned = cleaned.replace(/<\/h4>/g, '</h4></div>');
+
+            // Fix double divs
+            cleaned = cleaned.replace(/<\/div><div class="ai-section/g, '</div><div class="ai-section');
+
+            // Clean up extra tags
+            cleaned = cleaned.replace(/<\/h4><\/div><\/h4>/g, '</h4></div>');
+
+            return cleaned;
+        }
+
+        // ===============================
+        // HISTORY FUNCTIONS
+        // ===============================
+        function renderHistory() {
+            const container = document.getElementById('history-list');
+            const countEl = document.getElementById('history-count');
+
+            if (!state.history || state.history.length === 0) {
+                container.innerHTML = `<div class="empty-state">
+            <i class="bi bi-inbox"></i>
+            <p>Belum ada history. Lakukan analisis untuk menyimpan snapshot.</p>
+        </div>`;
+                countEl.innerText = '0';
+                return;
+            }
+
+            countEl.innerText = state.history.length;
+            const sortedHistory = [...state.history].reverse();
+
+            container.innerHTML = '';
+            sortedHistory.forEach((item, index) => {
+                const originalIndex = state.history.length - 1 - index;
+                const grade = item.grade || '-';
+                const velocity = item.velocity || 0;
+                const progress = item.progress || 0;
+                const dashP = item.dashP || 0;
+
+                const card = document.createElement('div');
+                card.className = 'history-card';
+                card.innerHTML = `
+            <div class="history-header">
+                <div class="history-date">
+                    <i class="bi bi-calendar3"></i>
+                    ${item.date}
+                    <span style="font-size:0.65rem; color:var(--text-muted); font-weight:normal; margin-left:6px;">
+                        #${state.history.length - originalIndex}
+                    </span>
+                </div>
+                <button class="btn-danger" onclick="deleteHistory(${originalIndex})" style="padding:4px 8px; font-size:0.65rem;">
+                    <i class="bi bi-trash3"></i>
+                </button>
+            </div>
+            <div class="history-stats">
+                <div class="history-stat-item">
+                    <div class="history-stat-label"><i class="bi bi-graph-up"></i> Progress</div>
+                    <div class="history-stat-value" style="color:${dashP >= 40 ? 'var(--accent-green)' : 'var(--accent-orange)'};">${dashP.toFixed(1)}%</div>
+                </div>
+                <div class="history-stat-item">
+                    <div class="history-stat-label"><i class="bi bi-database"></i> Data</div>
+                    <div class="history-stat-value">${progress}</div>
+                </div>
+                <div class="history-stat-item">
+                    <div class="history-stat-label"><i class="bi bi-speedometer2"></i> Ritme</div>
+                    <div class="history-stat-value">${velocity}/hari</div>
+                </div>
+                <div class="history-stat-item">
+                    <div class="history-stat-label"><i class="bi bi-trophy"></i> Grade</div>
+                    <div class="history-stat-value" style="color:${grade === 'A+' || grade === 'A' ? 'var(--accent-green)' : grade === 'B' ? '#3b82f6' : grade === 'C' ? 'var(--accent-orange)' : 'var(--accent-red)'};">${grade}</div>
+                </div>
+            </div>
+        `;
+                container.appendChild(card);
+            });
+        }
+
+        function deleteHistory(index) {
+            if (confirm('Hapus snapshot tanggal ' + state.history[index].date + '?')) {
+                state.history.splice(index, 1);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                renderHistory();
+            }
+        }
+
+        function clearAllHistory() {
+            if (state.history.length === 0) return;
+            if (confirm('Hapus semua ' + state.history.length + ' snapshot history?')) {
+                state.history = [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                renderHistory();
+            }
+        }
+
+        // ===============================
+        // MAIN ACTIONS
+        // ===============================
+        async function runAnalysis() {
+            const btn = document.getElementById('btn-analyze');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sedang Menganalisis...';
+
+            syncDashboardFromSLS();
+            syncConfigTargets();
+            state.dashboard.draft = parseInt(document.getElementById('global-draft').value) || 0;
+
+            const prog = getProgress();
+            const perf = performanceGrade(prog.dashP);
+
+            const todayStr = new Date().toLocaleDateString('id-ID');
+
+            const existingToday = state.history.find(h => h.date === todayStr);
+            if (!existingToday) {
+                state.history.push({
+                    date: todayStr,
+                    progress: prog.val,
+                    dashP: prog.dashP,
+                    velocity: getVelocity(),
+                    grade: perf.g
+                });
+            } else {
+                existingToday.progress = prog.val;
+                existingToday.dashP = prog.dashP;
+                existingToday.velocity = getVelocity();
+                existingToday.grade = perf.g;
+            }
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+            renderTerminAlert(prog);
+            renderForecast();
+            renderTargetsAndComparison(prog);
+            renderDifferenceAnalysis();
+            renderPriorityAccordions();
+            renderPerformance(prog, perf);
+            updateHeaderStats();
+
+            const orchestrator = new HybridAIOrchestrator(state.apiKeys);
+            const top3 = prioritasSLS().slice(0, 3);
+            const elapsedDays = state.history.length > 1 ? state.history.length - 1 : 23;
+            const modeText = state.isAccumulationMode ? '(Akumulasi ' + elapsedDays + ' hari)' : '(Harian)';
+
+            const aiPrompt = 'Analisis progres Saka Tracker ' + modeText + ': ' +
+                'Progress Dashboard ' + prog.dashP.toFixed(2) + '% (' + prog.val + ' unit). ' +
+                'Ritme rata-rata 7 hari: ' + getVelocity() + ' data/hari. ' +
+                'Status Termin 1 (Target 40%): ' + (prog.dashP >= 40 ? 'Tercapai' : 'Belum Tercapai') + '. ' +
+                'Top 3 SLS prioritas: ' + top3.map(s => s.kode + ' (' + s.open + ' open)').join(', ') + '. ' +
+                'Berikan insight strategis singkat dengan format: gunakan #### untuk judul bagian, **tebal** untuk penekanan, dan - untuk poin-poin.';
+
+            const insight = await orchestrator.generateInsight(aiPrompt);
+            document.getElementById('ai-insights').innerHTML = cleanAIResponse(insight);
+
+            const container = document.getElementById('analysis-container');
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '12px';
+            setTimeout(() => container.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cpu"></i> ANALISIS & SIMPAN SNAPSHOT';
+
+            if (document.getElementById('page-history').classList.contains('active')) {
+                renderHistory();
+            }
+        }
+
+        // ===============================
+        // NAVIGATION
+        // ===============================
+        function switchPage(pageName) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+            const targetPage = document.getElementById('page-' + pageName);
+            if (targetPage) targetPage.classList.add('active');
+
+            const navItems = document.querySelectorAll('.nav-item');
+            const pageMap = { 'dashboard': 0, 'data': 1, 'history': 2, 'formgear': 3, 'formbuilder': 4, 'settings': 5 };
+            if (pageMap[pageName] !== undefined && navItems[pageMap[pageName]]) {
+                navItems[pageMap[pageName]].classList.add('active');
+            }
+
+            if (pageName === 'history') renderHistory();
+            if (pageName === 'formgear' && window.initFormGearDemo) window.initFormGearDemo();
+            if (pageName === 'formbuilder' && window.initFormBuilder) window.initFormBuilder();
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // ===============================
+        // CRUD DATA SLS
+        // ===============================
+        function renderDataSLSPage() {
+            const list = document.getElementById('data-sls-list');
+            list.innerHTML = '';
+            state.sls.forEach((s, idx) => {
+                const row = document.createElement('div');
+                row.className = 'data-sls-row';
+                row.style.cssText = "display: grid; grid-template-columns: 60px 1fr 1fr 40px; gap: 8px; align-items: center; margin-bottom: 8px; padding: 8px 10px; background: #0f172a; border-radius: 10px; border: 1px solid var(--border);";
+                row.innerHTML = `
+            <input type="text" value="${s.kode}" onchange="updateDataSLS(${idx}, 'kode', this.value)" style="text-align:center; font-weight:bold; color:var(--accent-blue); background:transparent; border:none; font-size:0.85rem;">
+            <input type="number" value="${s.open}" onchange="updateDataSLS(${idx}, 'open', this.value)" placeholder="Open FASIH" style="background:#0f172a; border:1px solid var(--border); color:white; padding:8px; border-radius:8px; width:100%; text-align:center; font-size:0.85rem;">
+            <input type="number" value="${s.muatan || 0}" onchange="updateDataSLS(${idx}, 'muatan', this.value)" placeholder="Jml Muatan" style="background:#0f172a; border:1px solid var(--border); color:white; padding:8px; border-radius:8px; width:100%; text-align:center; font-size:0.85rem;">
+            <button class="btn-delete" onclick="deleteDataSLS(${idx})" style="background: rgba(239, 68, 68, 0.1); color: var(--accent-red); border: none; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;"><i class="bi bi-x-lg"></i></button>
+        `;
+                list.appendChild(row);
+            });
+        }
+
+        function updateDataSLS(idx, field, val) {
+            if (field === 'open' || field === 'muatan') val = parseInt(val) || 0;
+            state.sls[idx][field] = val;
+        }
+
+        function addNewSLSRow() {
+            state.sls.push({ kode: "NEW", nama: "", open: 0, submit: 0, reject: 0, pending: 0, approve: 0, muatan: 0 });
+            renderDataSLSPage();
+        }
+
+        function deleteDataSLS(idx) {
+            if (confirm('Hapus baris SLS ini?')) {
+                state.sls.splice(idx, 1);
+                renderDataSLSPage();
+            }
+        }
+
+        function saveDataSLS() {
+            syncConfigTargets();
+            syncDashboardFromSLS();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            showAlert('Data Master SLS berhasil disimpan.');
+            initForm();
+            updateHeaderStats();
+        }
+
+        // ===============================
+        // SETTINGS, BACKUP & RESTORE
+        // ===============================
+        function saveSettings() {
+            state.apiKeys.openai = document.getElementById('api-openai').value.trim();
+            state.apiKeys.gemini = document.getElementById('api-gemini').value.trim();
+            state.apiKeys.mistral = document.getElementById('api-mistral').value.trim();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            updateApiStatusUI();
+            showAlert('Konfigurasi API Key berhasil disimpan.');
+        }
+
+        function loadApiKeys() {
+            document.getElementById('api-openai').value = state.apiKeys.openai || '';
+            document.getElementById('api-gemini').value = state.apiKeys.gemini || '';
+            document.getElementById('api-mistral').value = state.apiKeys.mistral || '';
+            updateApiStatusUI();
+        }
+
+        function updateApiStatusUI() {
+            ['openai', 'gemini', 'mistral'].forEach(key => {
+                const hasKey = !!state.apiKeys[key];
+                const dot = document.getElementById('status-' + key).querySelector('.status-dot');
+                const text = document.getElementById('status-' + key);
+                dot.className = 'status-dot ' + (hasKey ? 'active' : '');
+                text.innerHTML = '<span class="status-dot ' + (hasKey ? 'active' : '') + '"></span> ' + (hasKey ? '<i class="bi bi-check-circle-fill"></i> Terkonfigurasi' : '<i class="bi bi-x-circle-fill"></i> Belum dikonfigurasi');
+            });
+        }
+
+        async function testAllApis() {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '<i class="bi bi-arrow-repeat"></i> Menguji koneksi...';
+            let output = '';
+            const tests = [
+                { name: 'OpenAI', key: state.apiKeys.openai, url: 'https://api.openai.com/v1/models', auth: 'Bearer ' + state.apiKeys.openai },
+                { name: 'Gemini', key: state.apiKeys.gemini, url: 'https://generativelanguage.googleapis.com/v1beta/models?key=' + state.apiKeys.gemini, auth: null },
+                { name: 'Mistral', key: state.apiKeys.mistral, url: 'https://api.mistral.ai/v1/models', auth: 'Bearer ' + state.apiKeys.mistral }
+            ];
+            for (const t of tests) {
+                if (!t.key) { output += '<div><i class="bi bi-x-circle"></i> ' + t.name + ': API Key kosong</div>'; continue; }
+                try {
+                    const headers = t.auth ? { 'Authorization': t.auth } : {};
+                    const res = await fetch(t.url, { headers, signal: AbortSignal.timeout(5000) });
+                    if (res.ok) output += '<div style="color:var(--accent-green)"><i class="bi bi-check-circle-fill"></i> ' + t.name + ': Terhubung</div>';
+                    else output += '<div style="color:var(--accent-red)"><i class="bi bi-x-circle"></i> ' + t.name + ': Gagal (' + res.status + ')</div>';
+                } catch (e) { output += '<div style="color:var(--accent-red)"><i class="bi bi-x-circle"></i> ' + t.name + ': ' + e.message + '</div>'; }
+            }
+            resultsDiv.innerHTML = output;
+        }
+
+        function backupData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "saka_tracker_backup_" + new Date().toISOString().slice(0, 10) + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function restoreData(inputElement) {
+            const file = inputElement.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const restoredState = JSON.parse(e.target.result);
+                    if (restoredState.sls && restoredState.apiKeys) {
+                        state = restoredState;
+                        if (!state.consent) state.consent = { accepted: false, version: null, date: null };
+                        if (!state.security) state.security = { pinEnabled: false, pinHash: null, recoveryHash: null, failedAttempts: 0, lockUntil: null };
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                        showAlert('Data berhasil dipulihkan.');
+                        location.reload();
+                    } else {
+                        showAlert('File backup tidak valid.');
+                    }
+                } catch (err) {
+                    showAlert('Gagal membaca file: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // ===============================
+        // LEGAL MODALS
+        // ===============================
+        function openModal(type) {
+            const modal = document.getElementById('legal-modal');
+            const title = document.getElementById('modal-title');
+            const body = document.getElementById('modal-body');
+            modal.style.display = 'flex';
+            if (type === 'tos') {
+                title.innerHTML = '<i class="bi bi-shield-check"></i> Terms of Service';
+                body.innerHTML = `
+            <span class="legal-updated">Terakhir diperbarui: 8 Juli 2026 &middot; Versi 5.4.5</span>
+            <div class="legal-note"><i class="bi bi-info-circle-fill"></i> Saka Tracker adalah <strong>alat bantu internal</strong> untuk monitoring progres lapangan Sensus Ekonomi 2026 (SE2026). Aplikasi ini <strong>bukan produk resmi BPS</strong>.</div>
+            <h4><i class="bi bi-1-circle-fill"></i> Penerimaan Ketentuan</h4>
+            <p>Dengan mengakses dan menggunakan Saka Tracker, Anda menyatakan telah membaca, memahami, dan menyetujui seluruh ketentuan dalam dokumen ini.</p>
+            <h4><i class="bi bi-2-circle-fill"></i> Deskripsi Layanan</h4>
+            <p>Saka Tracker menyediakan fitur pencatatan progres SLS, perhitungan target & forecast, prioritisasi kerja, serta ringkasan analisis berbasis AI.</p>
+            <h4><i class="bi bi-3-circle-fill"></i> Tanggung Jawab Pengguna</h4>
+            <ul>
+                <li>Anda bertanggung jawab penuh atas keakuratan data yang diinput.</li>
+                <li>Jaga kerahasiaan API key pihak ketiga yang Anda masukkan.</li>
+                <li><strong>Dilarang</strong> memasukkan data pribadi responden sensus ke aplikasi ini.</li>
+            </ul>
+            <h4><i class="bi bi-4-circle-fill"></i> Layanan Pihak Ketiga (AI Provider)</h4>
+            <p>Fitur AI Insight bersifat opsional dan hanya aktif jika Anda mengisi API key sendiri. Penggunaan tunduk pada ketentuan masing-masing provider.</p>
+            <h4><i class="bi bi-5-circle-fill"></i> Tanpa Jaminan (No Warranty)</h4>
+            <p>Aplikasi disediakan "SEBAGAIMANA ADANYA" (AS IS) tanpa jaminan dalam bentuk apa pun.</p>
+            <h4><i class="bi bi-6-circle-fill"></i> Batasan Tanggung Jawab</h4>
+            <p>Pengembang tidak bertanggung jawab atas kehilangan data akibat penghapusan cache browser atau penggantian perangkat.</p>
+            <h4><i class="bi bi-envelope-fill"></i> Kontak</h4>
+            <p>Pertanyaan dapat disampaikan ke <strong>mlevian@protonmail.com</strong> atau WhatsApp developer.</p>
+        `;
+            } else if (type === 'privacy') {
+                title.innerHTML = '<i class="bi bi-lock-fill"></i> Privacy Policy';
+                body.innerHTML = `
+            <span class="legal-updated">Terakhir diperbarui: 8 Juli 2026 &middot; Versi 5.4.5</span>
+            <div class="legal-note"><i class="bi bi-hdd-fill"></i> Saka Tracker bersifat <strong>local-first</strong>: tidak ada server backend yang menyimpan data Anda.</div>
+            <h4><i class="bi bi-1-circle-fill"></i> Data yang Diproses</h4>
+            <p>Aplikasi menyimpan data berikut secara lokal di localStorage:</p>
+            <ul>
+                <li>Angka progres per SLS: open, submit, reject, pending, approve, dan draft.</li>
+                <li>Riwayat snapshot harian (history).</li>
+                <li>API key pihak ketiga (jika Anda mengisinya).</li>
+            </ul>
+            <h4><i class="bi bi-2-circle-fill"></i> Penyimpanan Lokal</h4>
+            <p>Data tersimpan di localStorage browser. Tidak otomatis tersinkronisasi ke perangkat lain.</p>
+            <h4><i class="bi bi-3-circle-fill"></i> Pengiriman Data ke Provider AI</h4>
+            <p>Fitur AI Insight bersifat opsional. Saat digunakan, ringkasan angka agregat dikirim langsung ke provider AI.</p>
+            <h4><i class="bi bi-4-circle-fill"></i> API Key</h4>
+            <p>API key disimpan di localStorage dan digunakan hanya untuk memanggil layanan AI terkait.</p>
+            <h4><i class="bi bi-5-circle-fill"></i> Hak Anda atas Data</h4>
+            <ul>
+                <li><strong>Export</strong>: unduh seluruh data melalui Backup.</li>
+                <li><strong>Hapus</strong>: hapus history atau seluruh data.</li>
+                <li><strong>Portabilitas</strong>: file backup JSON dapat dipindahkan ke perangkat lain.</li>
+            </ul>
+            <h4><i class="bi bi-envelope-fill"></i> Kontak</h4>
+            <p>Pertanyaan dapat disampaikan ke <strong>mlevian@protonmail.com</strong> atau WhatsApp developer.</p>
+        `;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('legal-modal').style.display = 'none';
+        }
+
+        // ===============================
+        // HYBRID AI ORCHESTRATOR
+        // ===============================
+        class HybridAIOrchestrator {
+            constructor(keys) {
+                this.keys = keys;
+                this.activeProvider = null;
+                this.providers = [
+                    { name: 'OpenAI', key: keys.openai, endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },
+                    { name: 'Gemini', key: keys.gemini, endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', model: 'gemini-2.0-flash' },
+                    { name: 'Mistral', key: keys.mistral, endpoint: 'https://api.mistral.ai/v1/chat/completions', model: 'mistral-small-latest' }
+                ];
+            }
+
+            async generateInsight(prompt) {
+                for (const provider of this.providers) {
+                    if (!provider.key) continue;
+                    try {
+                        this.updateStatus(provider.name, 'calling');
+                        const response = await this.callProvider(provider, prompt);
+                        this.activeProvider = provider.name;
+                        this.updateStatus(provider.name, 'active');
+                        return this.cleanMarkdown(response);
+                    } catch (err) {
+                        console.warn(provider.name + ' failed:', err.message);
+                        this.updateStatus(provider.name, 'error');
+                        continue;
+                    }
+                }
+                this.activeProvider = 'Deterministic Fallback';
+                this.updateStatus('Fallback', 'active');
+                return this.deterministicFallback();
+            }
+
+            async callProvider(provider, prompt) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 12000);
+                let body, headers;
+                if (provider.name === 'Gemini') {
+                    body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] });
+                    headers = { 'Content-Type': 'application/json', 'x-goog-api-key': provider.key };
+                } else {
+                    body = JSON.stringify({ model: provider.model, messages: [{ role: 'user', content: prompt }], temperature: 0.3, max_tokens: 500 });
+                    headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + provider.key };
+                }
+                const res = await fetch(provider.endpoint, { method: 'POST', headers, body, signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    const err = new Error(errData.error?.message || 'HTTP ' + res.status);
+                    err.status = res.status; throw err;
+                }
+                const data = await res.json();
+                if (provider.name === 'Gemini') return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                return data.choices?.[0]?.message?.content || '';
+            }
+
+            cleanMarkdown(text) {
+                if (!text) return '';
+                // Let the cleanAIResponse function handle formatting
+                return text;
+            }
+
+            deterministicFallback() {
+                const prog = getProgress();
+                const sisaHari = getSisaHariKeClearance();
+                const remaining = state.config.assessment - prog.val;
+                const reqVel = Math.ceil(remaining / Math.max(1, sisaHari));
+                const currVel = getVelocity();
+                const isOnTrack = currVel >= reqVel;
+                const top3 = prioritasSLS().slice(0, 3).map(s => s.kode + ' (' + s.open + ' open)').join(', ');
+                const statusTag = isOnTrack ? '<span class="ai-success"><i class="bi bi-check-circle-fill"></i> ON TRACK</span>' : '<span class="ai-warn"><i class="bi bi-exclamation-triangle-fill"></i> AT RISK</span>';
+                if (currVel === 0) {
+                    return '<p>' + statusTag + ': Belum ada data progres yang tercatat.</p><p><i class="bi bi-pin-angle-fill"></i> Mulai input data harian untuk mendapatkan analisis yang akurat.</p><p>Target clearance: <strong>' + clearanceDate.toLocaleDateString('id-ID') + '</strong></p>';
+                }
+                return '<h4>Status Saat Ini</h4><p>' + statusTag + ': Ritme saat ini <strong>' + currVel + ' data/hari</strong> ' + (isOnTrack ? 'memenuhi' : 'belum memenuhi') + ' target clearance.</p><p>Sisa data: <strong>' + remaining + '</strong>. Kebutuhan harian: <strong>' + reqVel + ' data</strong>.</p><h4>Prioritas</h4><p>Fokus prioritas: <span class="ai-highlight">' + top3 + '</span>.</p>' + (!isOnTrack ? '<h4>Rekomendasi</h4><p><i class="bi bi-lightbulb-fill"></i> Percepat approval di SLS prioritas dan evaluasi bottleneck harian.</p>' : '');
+            }
+
+            updateStatus(name, status) {
+                const el = document.getElementById('ai-provider-status');
+                let statusText = '<i class="bi bi-circle-fill" style="color:var(--accent-green); font-size:0.6rem;"></i>';
+                if (status === 'calling') statusText = '<i class="bi bi-arrow-repeat"></i>';
+                else if (status === 'error') statusText = '<i class="bi bi-circle-fill" style="color:var(--accent-red); font-size:0.6rem;"></i>';
+                else if (status === 'active') statusText = '<i class="bi bi-circle-fill" style="color:var(--accent-green); font-size:0.6rem;"></i>';
+                el.innerHTML = 'Multi-AI Orchestrator | Provider: <span class="provider-active">' + statusText + ' ' + name + '</span>';
+            }
+        }
+
+        // ===============================
+        // CONSENT GATE & PIN LOCK
+        // ===============================
+        function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+        async function sha256Hex(text) {
+            const enc = new TextEncoder().encode(text);
+            const buf = await crypto.subtle.digest('SHA-256', enc);
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function checkConsentGate() {
+            const gate = document.getElementById('consent-gate');
+            const needsConsent = !state.consent || state.consent.version !== LEGAL_VERSION || !state.consent.accepted;
+            if (needsConsent) {
+                gate.style.display = 'flex';
+                document.getElementById('consent-checkbox').checked = false;
+                document.getElementById('btn-consent-agree').disabled = true;
+            } else {
+                gate.style.display = 'none';
+                checkPinLock();
+            }
+        }
+
+        function acceptConsent() {
+            state.consent = { accepted: true, version: LEGAL_VERSION, date: new Date().toISOString() };
+            saveState();
+            document.getElementById('consent-gate').style.display = 'none';
+            checkPinLock();
+        }
+
+        let pinBuffer = '';
+
+        function checkPinLock() {
+            const lock = document.getElementById('pin-lock-screen');
+            if (state.security && state.security.pinEnabled) {
+                lock.style.display = 'flex';
+                pinBuffer = '';
+                updatePinDots();
+                document.getElementById('recovery-flow').style.display = 'none';
+                document.getElementById('pin-error').innerText = '';
+            } else {
+                lock.style.display = 'none';
+            }
+        }
+
+        function lockAppNow() {
+            if (!state.security.pinEnabled) { showAlert('Aktifkan PIN terlebih dahulu.'); return; }
+            document.getElementById('pin-lock-screen').style.display = 'flex';
+            pinBuffer = '';
+            updatePinDots();
+        }
+
+        function updatePinDots() {
+            document.querySelectorAll('#pin-dots span').forEach((d, i) => d.classList.toggle('filled', i < pinBuffer.length));
+        }
+
+        function pinPress(digit) {
+            if (pinBuffer.length >= 4) return;
+            pinBuffer += digit;
+            updatePinDots();
+            if (pinBuffer.length === 4) setTimeout(verifyPin, 150);
+        }
+
+        function pinBackspace() {
+            pinBuffer = pinBuffer.slice(0, -1);
+            updatePinDots();
+            document.getElementById('pin-error').innerText = '';
+        }
+
+        async function verifyPin() {
+            const now = Date.now();
+            if (state.security.lockUntil && now < state.security.lockUntil) {
+                const secs = Math.ceil((state.security.lockUntil - now) / 1000);
+                document.getElementById('pin-error').innerText = 'Terlalu banyak percobaan. Coba lagi dalam ' + secs + ' detik.';
+                pinBuffer = ''; updatePinDots();
+                return;
+            }
+            const hash = await sha256Hex(pinBuffer);
+            if (hash === state.security.pinHash) {
+                state.security.failedAttempts = 0;
+                state.security.lockUntil = null;
+                saveState();
+                document.getElementById('pin-lock-screen').style.display = 'none';
+                document.getElementById('pin-error').innerText = '';
+            } else {
+                state.security.failedAttempts = (state.security.failedAttempts || 0) + 1;
+                if (state.security.failedAttempts >= 5) {
+                    state.security.lockUntil = now + 30000;
+                    state.security.failedAttempts = 0;
+                    document.getElementById('pin-error').innerText = 'Terlalu banyak percobaan salah. Coba lagi dalam 30 detik.';
+                } else {
+                    document.getElementById('pin-error').innerText = 'PIN salah. Sisa percobaan: ' + (5 - state.security.failedAttempts);
+                }
+                saveState();
+                pinBuffer = '';
+                updatePinDots();
+            }
+        }
+
+        function showRecoveryFlow() {
+            document.getElementById('recovery-flow').style.display = 'block';
+        }
+
+        async function verifyRecovery() {
+            const ans = document.getElementById('recovery-answer-input').value.trim().toLowerCase();
+            const msg = document.getElementById('recovery-msg');
+            if (!ans) { msg.style.color = 'var(--accent-red)'; msg.innerText = 'Isi jawaban pemulihan terlebih dahulu.'; return; }
+            if (!state.security.recoveryHash) {
+                msg.style.color = 'var(--accent-red)';
+                msg.innerText = 'Belum ada jawaban pemulihan tersimpan. Reset hanya bisa lewat hapus data browser.';
+                return;
+            }
+            const hash = await sha256Hex(ans);
+            if (hash === state.security.recoveryHash) {
+                state.security.pinEnabled = false;
+                state.security.pinHash = null;
+                state.security.failedAttempts = 0;
+                state.security.lockUntil = null;
+                saveState();
+                document.getElementById('pin-lock-screen').style.display = 'none';
+                showAlert('PIN berhasil direset. Silakan atur PIN baru di halaman Pengaturan.');
+                switchPage('settings');
+                updatePinSecurityUI();
+            } else {
+                msg.style.color = 'var(--accent-red)';
+                msg.innerText = 'Jawaban tidak cocok. Coba lagi.';
+            }
+        }
+
+        async function setupPin() {
+            const pin = document.getElementById('pin-new').value.trim();
+            const confirmPin = document.getElementById('pin-confirm').value.trim();
+            const recovery = document.getElementById('pin-recovery').value.trim();
+            if (!/^\d{4}$/.test(pin)) { showAlert('PIN harus tepat 4 digit angka.'); return; }
+            if (pin !== confirmPin) { showAlert('Konfirmasi PIN tidak cocok.'); return; }
+            if (!recovery || recovery.length < 3) { showAlert('Isi jawaban pemulihan minimal 3 karakter.'); return; }
+            state.security.pinHash = await sha256Hex(pin);
+            state.security.recoveryHash = await sha256Hex(recovery.toLowerCase());
+            state.security.pinEnabled = true;
+            state.security.failedAttempts = 0;
+            state.security.lockUntil = null;
+            saveState();
+            document.getElementById('pin-new').value = '';
+            document.getElementById('pin-confirm').value = '';
+            document.getElementById('pin-recovery').value = '';
+            updatePinSecurityUI();
+            showAlert('PIN Lock berhasil diaktifkan.');
+        }
+
+        function disablePin() {
+            if (!confirm('Nonaktifkan PIN Lock?')) return;
+            state.security = { pinEnabled: false, pinHash: null, recoveryHash: null, failedAttempts: 0, lockUntil: null };
+            saveState();
+            updatePinSecurityUI();
+        }
+
+        function updatePinSecurityUI() {
+            const statusDisplay = document.getElementById('pin-status-display');
+            const lockBtn = document.getElementById('btn-lock-now');
+            const disableBtn = document.getElementById('btn-disable-pin');
+            if (state.security.pinEnabled) {
+                statusDisplay.innerHTML = '<span class="status-dot active"></span> PIN Lock: Aktif';
+                lockBtn.style.display = 'flex';
+                disableBtn.style.display = 'flex';
+            } else {
+                statusDisplay.innerHTML = '<span class="status-dot"></span> PIN Lock: Nonaktif';
+                lockBtn.style.display = 'none';
+                disableBtn.style.display = 'none';
+            }
+        }
+        // ===============================
+        // PWA INSTALL PROMPT
+        // ===============================
+        let deferredPrompt;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            deferredPrompt = e;
+            // Show install banner
+            const banner = document.getElementById('install-banner');
+            if (banner) banner.classList.add('show');
+        });
+
+        document.getElementById('btn-install')?.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            // Show the install prompt
+            deferredPrompt.prompt();
+            // Wait for the user to respond to the prompt
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User response to install: ${outcome}`);
+            // Hide banner after install
+            if (outcome === 'accepted') {
+                document.getElementById('install-banner').classList.remove('show');
+            }
+            deferredPrompt = null;
+        });
+
+        // Hide banner when app is already installed
+        window.addEventListener('appinstalled', () => {
+            document.getElementById('install-banner').classList.remove('show');
+            console.log('[PWA] Saka Tracker installed as PWA');
+        });
+        // ===============================
+        // INITIALIZATION
+        // ===============================
+        function initForm() {
+            syncConfigTargets();
+            syncDashboardFromSLS();
+            updateHeaderStats();
+
+            const checkbox = document.getElementById('mode-akumulasi');
+            if (checkbox) {
+                checkbox.checked = state.isAccumulationMode;
+                const dateDisplay = document.getElementById('date-range-display');
+                const toggleLabel = document.querySelector('.toggle-label');
+                if (state.isAccumulationMode) {
+                    toggleLabel.innerHTML = '<i class="bi bi-calendar-range"></i> Mode Akumulasi (Rentang Tanggal)';
+                    if (dateDisplay) dateDisplay.style.display = "block";
+                } else {
+                    toggleLabel.innerHTML = '<i class="bi bi-calendar-event"></i> Mode Input Harian';
+                    if (dateDisplay) dateDisplay.style.display = "none";
+                }
+            }
+
+            const container = document.getElementById('sls-inputs-container');
+            if (!container) return;
+            container.innerHTML = '';
+            state.sls.forEach((s, idx) => {
+                const row = document.createElement('div');
+                row.className = 'input-row';
+                row.style.display = 'contents';
+                row.innerHTML = `
+            <div class="sls-code">${s.kode}</div>
+            <input type="number" value="${s.open}" onchange="updateSLS(${idx},'open',this.value)">
+            <input type="number" value="${s.submit}" onchange="updateSLS(${idx},'submit',this.value)">
+            <input type="number" value="${s.reject}" onchange="updateSLS(${idx},'reject',this.value)">
+            <input type="number" value="${s.pending}" onchange="updateSLS(${idx},'pending',this.value)">
+            <input type="number" value="${s.approve}" onchange="updateSLS(${idx},'approve',this.value)">
+        `;
+                container.appendChild(row);
+            });
+
+            const dateEl = document.getElementById('current-date');
+            if (dateEl) dateEl.innerText = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        window.addEventListener('DOMContentLoaded', function () {
+            setTimeout(function () {
+                initForm();
+                loadApiKeys();
+                renderHistory();
+                updatePinSecurityUI();
+                checkConsentGate();
+                if (window.initFormGearDemo) window.initFormGearDemo();
+            }, 100);
+        });
+    </script>
+    <!-- FormGear v2.0 Scripts -->
+    <script src="assets/formgear/firebase-manager.js"></script>
+    <script src="assets/formgear/form-builder.js"></script>
+    <script src="assets/formgear/demo-forms.js"></script>
+    
+    <!-- FormGear v2.0 Integration Script -->
+    <script>
+        /**
+         * FormGear v2.0 Integration - Fungsi dan event handlers
+         */
+
+        let currentFormGearForm = 'demo-kegiatan';
+        let formGearFirebaseManager = null;
+
+        // Handle form selection change
+        function handleFormChange(formId) {
+            currentFormGearForm = formId;
+            renderFormGear(formId);
+        }
+
+        // Render form ke container
+        function renderFormGear(formId) {
+            const container = document.getElementById('formgear-container');
+            if (!container) return;
+
+            window.FormGearBuilderInstance.renderForm(formId, 'formgear-container');
+            loadSubmittedForms();
+        }
+
+        // Load dan tampilkan form yang sudah terkirim
+        function loadSubmittedForms() {
+            const gallery = document.getElementById('formgear-gallery');
+            const emptyState = document.getElementById('formgear-empty-state');
+            
+            if (!gallery) return;
+
+            const savedForms = JSON.parse(localStorage.getItem('formgear_submissions') || '[]');
+            const currentFormSubmissions = savedForms.filter(f => f.formId === currentFormGearForm);
+
+            if (currentFormSubmissions.length === 0) {
+                gallery.innerHTML = '';
+                emptyState.style.display = 'flex';
+                document.getElementById('local-submissions-count').textContent = '0';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            gallery.innerHTML = currentFormSubmissions.map((submission, idx) => `
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <div class="form-card-title">${submission.formId.replace('demo-', '').toUpperCase()}</div>
+                        <div class="form-card-status">
+                            <i class="bi bi-check-circle"></i> 
+                            ${submission.status === 'submitted' ? 'Terkirim' : 'Tersimpan'}
+                        </div>
+                    </div>
+                    <div class="form-card-date">
+                        ${new Date(submission.timestamp).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}
+                    </div>
+                    <div class="form-card-actions">
+                        <button class="form-card-action-btn" onclick="viewFormData(${idx})">
+                            <i class="bi bi-eye"></i> Lihat
+                        </button>
+                        <button class="form-card-action-btn" onclick="uploadSingleForm(${idx})">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </button>
+                        <button class="form-card-action-btn delete" onclick="deleteFormData(${idx})">
+                            <i class="bi bi-trash3"></i> Hapus
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('local-submissions-count').textContent = currentFormSubmissions.length;
+        }
+
+        // View form data
+        function viewFormData(idx) {
+            const savedForms = JSON.parse(localStorage.getItem('formgear_submissions') || '[]');
+            const currentFormSubmissions = savedForms.filter(f => f.formId === currentFormGearForm);
+            const formData = currentFormSubmissions[idx];
+
+            if (!formData) return;
+
+            let dataHtml = '<table style="width:100%; font-size: 0.8rem; border-collapse: collapse;">';
+            Object.entries(formData.data).forEach(([key, value]) => {
+                const displayValue = Array.isArray(value) ? value.join(', ') : value;
+                dataHtml += `
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 8px; font-weight: 600; width: 30%; color: var(--accent-blue);">${key}</td>
+                        <td style="padding: 8px;">${displayValue || '-'}</td>
+                    </tr>
+                `;
+            });
+            dataHtml += '</table>';
+
+            showAlert('Data Form:\n\n' + JSON.stringify(formData.data, null, 2));
+        }
+
+        // Upload single form ke Firebase
+        async function uploadSingleForm(idx) {
+            if (!formGearFirebaseManager || !formGearFirebaseManager.initialized) {
+                showAlert('Firebase belum siap. Coba lagi dalam beberapa detik.');
+                return;
+            }
+
+            const savedForms = JSON.parse(localStorage.getItem('formgear_submissions') || '[]');
+            const currentFormSubmissions = savedForms.filter(f => f.formId === currentFormGearForm);
+            const formData = currentFormSubmissions[idx];
+
+            if (!formData) return;
+
+            try {
+                const result = await formGearFirebaseManager.uploadFormData(
+                    formData.formId,
+                    formData.data
+                );
+                alert(`Form berhasil diunggah ke Firebase!\nID: ${result.id}`);
+                loadSubmittedForms();
+                updateFirebaseSubmissionCount();
+            } catch (error) {
+                alert(`Gagal mengunggah: ${error.message}`);
+            }
+        }
+
+        // Delete form data
+        function deleteFormData(idx) {
+            if (!confirm('Hapus form ini?')) return;
+
+            const savedForms = JSON.parse(localStorage.getItem('formgear_submissions') || '[]');
+            const currentFormIdx = savedForms.findIndex(f => f.formId === currentFormGearForm);
+            
+            let currentCount = 0;
+            const newSavedForms = savedForms.filter((form, i) => {
+                if (form.formId === currentFormGearForm) {
+                    if (currentCount === idx) {
+                        currentCount++;
+                        return false;
+                    }
+                    currentCount++;
+                }
+                return true;
+            });
+
+            localStorage.setItem('formgear_submissions', JSON.stringify(newSavedForms));
+            loadSubmittedForms();
+        }
+
+        // Sinkronkan semua form lokal ke Firebase
+        async function syncFormToFirebase() {
+            if (!formGearFirebaseManager || !formGearFirebaseManager.initialized) {
+                alert('Firebase belum siap. Coba lagi dalam beberapa detik.');
+                return;
+            }
+
+            const savedForms = JSON.parse(localStorage.getItem('formgear_submissions') || '[]');
+            
+            if (savedForms.length === 0) {
+                alert('Tidak ada form untuk disinkronkan');
+                return;
+            }
+
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Menyinkronkan...';
+
+            try {
+                let successCount = 0;
+                for (const formData of savedForms) {
+                    try {
+                        await formGearFirebaseManager.uploadFormData(
+                            formData.formId,
+                            formData.data
+                        );
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Gagal upload form ${formData.formId}:`, error);
+                    }
+                }
+
+                alert(`Sinkronisasi selesai: ${successCount}/${savedForms.length} form berhasil diunggah`);
+                loadSubmittedForms();
+                updateFirebaseSubmissionCount();
+            } catch (error) {
+                alert(`Sinkronisasi gagal: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-cloud-upload"></i> Sinkronkan Semua ke Firebase';
+            }
+        }
+
+        // Update Firebase submission count
+        async function updateFirebaseSubmissionCount() {
+            if (!formGearFirebaseManager || !formGearFirebaseManager.initialized) return;
+
+            try {
+                const submissions = await formGearFirebaseManager.getFormSubmissions(currentFormGearForm);
+                document.getElementById('firebase-submissions-count').textContent = submissions.length;
+            } catch (error) {
+                console.error('Error fetching Firebase submissions:', error);
+            }
+        }
+
+        // Update Firebase status display
+        function updateFirebaseStatus() {
+            const statusEl = document.getElementById('firebase-status');
+            if (!statusEl) return;
+
+            if (formGearFirebaseManager && formGearFirebaseManager.initialized) {
+                statusEl.innerHTML = `
+                    <span class="status-dot active"></span> 
+                    Firebase Connected - Project: formgear
+                `;
+                statusEl.style.color = 'var(--accent-green)';
+            } else {
+                statusEl.innerHTML = `
+                    <span class="status-dot"></span> 
+                    Initializing Firebase...
+                `;
+            }
+        }
+
+        // Initialize FormGear v2
+        function initializeFormGearV2() {
+            // Inisialisasi Firebase Manager
+            formGearFirebaseManager = new FormGearFirebaseManager();
+            
+            // Tunggu Firebase siap
+            const checkFirebase = setInterval(() => {
+                if (formGearFirebaseManager.initialized) {
+                    clearInterval(checkFirebase);
+                    updateFirebaseStatus();
+                    updateFirebaseSubmissionCount();
+                }
+            }, 500);
+
+            // Render form awal
+            setTimeout(() => {
+                renderFormGear('demo-kegiatan');
+                loadFormDefinitions(); // Load form definitions from Firebase
+            }, 100);
+        }
+
+        // Load and display form definitions as cards
+        function loadFormDefinitions() {
+            const gallery = document.getElementById('form-definitions-gallery');
+            if (!gallery) return;
+
+            const localDefs = JSON.parse(localStorage.getItem('formgear_form_definitions') || '[]');
+
+            const renderGallery = (forms) => {
+                if (forms.length === 0) {
+                    gallery.innerHTML = `
+                        <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 30px;">
+                            <i class="bi bi-inbox" style="font-size: 2rem; display: block; margin-bottom: 10px;"></i>
+                            <p>Belum ada form. <button class="btn-outline" onclick="switchPage('formbuilder')" style="color: var(--accent-blue); text-decoration: none; border:none; background:transparent; padding:0; font-size:0.85rem;">Buat form baru di Form Builder</button></p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                gallery.innerHTML = forms.map(form => {
+                    const fieldCount = form.sections?.reduce((count, s) => count + (s.fields?.length || 0), 0) || 0;
+                    const createdDate = new Date(form.createdAt || Date.now()).toLocaleDateString('id-ID');
+                    const sourceLabel = form.source === 'local' ? 'Lokal' : 'Firebase';
+
+                    return `
+                        <div style="background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: all 0.3s;">
+                            <div style="font-weight: 600; color: var(--text-main); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: start; gap:10px; flex-wrap:wrap;">
+                                <span style="flex: 1; word-break: break-word;">${form.name || 'Unnamed Form'}</span>
+                                <span style="background: var(--accent-blue); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap;">${fieldCount} field</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">${form.description || '-'}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px; display: flex; gap: 16px; flex-wrap:wrap;">
+                                <span>📅 ${createdDate}</span>
+                                <span>📂 ${form.category || 'Uncategorized'}</span>
+                                <span>${sourceLabel}</span>
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap:wrap;">
+                                <button onclick="switchPage('formbuilder'); setTimeout(() => selectBuilderTemplate('${form.id}'), 100);" style="flex: 1; min-width: 120px; padding: 8px; background: var(--accent-blue); color: white; border: none; border-radius: 6px; text-align: center; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='var(--accent-purple)'" onmouseout="this.style.background='var(--accent-blue)'>
+                                    ✏️ Edit
+                                </button>
+                                <button onclick="deleteFormDefinition('${form.id}')" style="flex: 1; min-width: 120px; padding: 8px; background: #c53030; color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='#9b2c2c'" onmouseout="this.style.background='#c53030'">
+                                    🗑️ Hapus
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            const renderLocalAndRemote = (remoteForms = []) => {
+                const merged = [
+                    ...localDefs.map(f => ({ ...f, source: 'local' })),
+                    ...remoteForms.filter(remote => !localDefs.some(local => local.id === remote.id)).map(f => ({ ...f, source: 'firebase' }))
+                ];
+                renderGallery(merged);
+            };
+
+            try {
+                if (window.firebase && firebase.database) {
+                    const formGearDb = firebase.database();
+                    formGearDb.ref('forms').on('value', (snapshot) => {
+                        const remoteForms = [];
+                        if (snapshot.exists()) {
+                            const data = snapshot.val();
+                            Object.keys(data).forEach(formId => {
+                                remoteForms.push({ id: formId, ...data[formId] });
+                            });
+                        }
+                        renderLocalAndRemote(remoteForms);
+                    });
+                } else {
+                    renderLocalAndRemote([]);
+                }
+            } catch (error) {
+                console.error('Error loading form definitions:', error);
+                renderLocalAndRemote([]);
+            }
+        }
+                try {
+                    const formGearDb = firebase.database();
+                    formGearDb.ref('forms').on('value', (snapshot) => {
+                        const gallery = document.getElementById('form-definitions-gallery');
+                        if (!gallery) return;
+
+                        const forms = [];
+                        if (snapshot.exists()) {
+                            const data = snapshot.val();
+                            Object.keys(data).forEach(formId => {
+                                forms.push({
+                                    id: formId,
+                                    ...data[formId]
+                                });
+                            });
+                        }
+
+                        // Render form cards
+                        if (forms.length === 0) {
+                            gallery.innerHTML = `
+                                <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 30px;">
+                                    <i class="bi bi-inbox" style="font-size: 2rem; display: block; margin-bottom: 10px;"></i>
+                                    <p>Belum ada form. <a href="./form-builder-app.html" style="color: var(--accent-blue); text-decoration: none;">Buat form baru di Form Builder</a></p>
+                                </div>
+                            `;
+                            return;
+                        }
+
+                        gallery.innerHTML = forms.map(form => {
+                            const fieldCount = form.sections?.reduce((count, s) => count + (s.fields?.length || 0), 0) || 0;
+                            const createdDate = new Date(form.createdAt || Date.now()).toLocaleDateString('id-ID');
+                            
+                            return `
+                                <div style="background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: all 0.3s;">
+                                    <div style="font-weight: 600; color: var(--text-main); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: start;">
+                                        <span style="flex: 1; word-break: break-word;">${form.name || 'Unnamed Form'}</span>
+                                        <span style="background: var(--accent-blue); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap; margin-left: 8px;">${fieldCount} field</span>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">${form.description || '-'}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px; display: flex; gap: 16px;">
+                                        <span>📅 ${createdDate}</span>
+                                        <span>📂 ${form.category || 'Uncategorized'}</span>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <a href="./form-builder-app.html" style="flex: 1; padding: 8px; background: var(--accent-blue); color: white; text-decoration: none; border-radius: 6px; text-align: center; font-size: 0.75rem; font-weight: 600; transition: background 0.3s;" onmouseover="this.style.background='var(--accent-purple)'" onmouseout="this.style.background='var(--accent-blue)'">
+                                            ✏️ Edit
+                                        </a>
+                                        <button onclick="deleteFormDefinition('${form.id}')" style="flex: 1; padding: 8px; background: #c53030; color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='#9b2c2c'" onmouseout="this.style.background='#c53030'">
+                                            🗑️ Hapus
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    });
+                    window.formDefinitionsLoaded = true;
+                } catch (error) {
+                    console.error('Error loading form definitions:', error);
+                }
+            }
+        }
+
+        // Delete form definition
+        function deleteFormDefinition(formId) {
+            if (confirm('Yakin ingin menghapus form ini?')) {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyCjyYMXZFhEZXn4JwL67LOxc6nZqszgyQQ",
+                    authDomain: "formgear.firebaseapp.com",
+                    databaseURL: "https://formgear-default-rtdb.asia-southeast1.firebasedatabase.app",
+                    projectId: "formgear"
+                };
+
+                try {
+                    firebase.database().ref(`forms/${formId}`).remove();
+                    console.log('Form deleted:', formId);
+                } catch (error) {
+                    console.error('Error deleting form:', error);
+                    alert('Error deleting form');
+                }
+            }
+        }
+
+        // Event listener saat FormGear page aktif
+        window.addEventListener('DOMContentLoaded', () => {
+            // Inisialisasi FormGear saat page load
+            setTimeout(() => {
+                initializeFormGearV2();
+            }, 500);
+        });
+
+        // Update Firebase status setiap 5 detik
+        setInterval(updateFirebaseStatus, 5000);
+    </script>
+
+</body>
+
+</html>
