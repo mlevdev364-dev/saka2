@@ -1,7 +1,7 @@
 # SAKA TRACKER — Technical Specification (SKILL.md)
   
 **App:** Saka Tracker — SE2026 SLS Progress Monitoring
-**Version documented:** v5.8.0 (Build 20260711)
+**Version documented:** v5.8.1 (Build 20260712)
 **Type:** Single-file client-side web app (HTML+CSS+JS, no backend, no build step) with a companion `manifest.json` + `sw.js` for PWA install/offline support
 **Storage:** Browser `localStorage`, key `saka_tracker_v5_4` (referenced via the `STORAGE_KEY` constant since v5.5.0; the literal key itself is unchanged for backward compatibility)
 **Author role documented for:** Saka_Omni (internal field-ops tooling)
@@ -364,7 +364,7 @@ Changelog entries live as a small inline note block inside the Settings `.app-in
 
 | Version | Change |
 |---|---|
-| v5.8.0 (addendum 2) | Added **Grup Field Dinamis / Repeater** to FormGear: a `panel` field can now be marked `repeatable` so its children render as N duplicable rows/instances at fill-time (e.g. multiple Kepala Keluarga per house). Bumped `FORMGEAR_ENGINE_VERSION`/`FORMGEAR_SCHEMA_VERSION` to `1.1.0` with an automatic migration in `migrateFormDefinition()` that back-fills `repeatable:false` on pre-existing panels. See §15.6. This does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself. |
+| v5.8.1 | Added **Grup Field Dinamis / Repeater** to FormGear: a `panel` field can now be marked `repeatable` so its children render as N duplicable rows/instances at fill-time (e.g. multiple Kepala Keluarga per house). Bumped `FORMGEAR_ENGINE_VERSION`/`FORMGEAR_SCHEMA_VERSION` to `1.1.0` with an automatic migration in `migrateFormDefinition()` that back-fills `repeatable:false` on pre-existing panels. See §15.6. |
 | v5.8.0 | Added independent Semantic Versioning for FormGear, see §15.5: `FORMGEAR_ENGINE_VERSION` (templating engine), `schemaVersion` (form-definition data shape), and a per-form `templateVersion` that auto-bumps PATCH on every save. Older forms are auto-migrated to the new fields on load via `migrateFormDefinition()`. This does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself. |
 | v5.7.0 (addendum) | Documented new FormGear advanced field types (`autonumber`, `customjs`) and their AI helper, see §15. This addendum does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself — it only documents the FormGear sub-module shipped alongside it (`assets/formgear/*`). |
 | v5.5.0 | Removed all emoji/emoticon usage app-wide in favor of Bootstrap Icons; documented the new cross-file Semantic Versioning policy and runtime version-sync mechanism between `index.html`, `sw.js`, and `manifest.json` (§12); updated §11 to reflect that the PWA shell (`manifest.json` + `sw.js`) now exists; removed the now-completed "PWA shell" item from §13. |

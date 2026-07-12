@@ -1,5 +1,5 @@
 // ===============================
-// SAKA TRACKER - Service Worker v5.8.0
+// SAKA TRACKER - Service Worker v5.8.1
 // ===============================
 // PENTING - SINKRONISASI VERSI (Semantic Versioning):
 // SW_VERSION di file ini HARUS selalu sama persis dengan APP_VERSION di
@@ -8,8 +8,8 @@
 // sehingga index.html dapat memverifikasi kecocokan versi secara otomatis
 // (lihat checkVersionSync() di index.html).
 
-const SW_VERSION = '5.8.0';
-const CACHE_NAME = 'saka-tracker-v5-8-0';
+const SW_VERSION = '5.8.1';
+const CACHE_NAME = 'saka-tracker-v5-8-1';
 const ASSETS = [
   './',
   './index.html',

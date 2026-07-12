@@ -1,8 +1,8 @@
 {
   "name": "Saka Tracker",
   "short_name": "SakaTracker",
-  "version": "5.8.0",
-  "description": "Aplikasi monitoring progres SLS SE2026 - Saka Tracker v5.8.0",
+  "version": "5.8.1",
+  "description": "Aplikasi monitoring progres SLS SE2026 - Saka Tracker v5.8.1",
   "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",
