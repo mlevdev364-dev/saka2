@@ -30,7 +30,7 @@
   // Ringkasan tiga lapis versi yang TIDAK saling terikat:
   //   APP_VERSION (index.html)  != FORMGEAR_ENGINE_VERSION (engine ini)
   //   != FORMGEAR_SCHEMA_VERSION (bentuk data)  != templateVersion (per-form)
-  const FORMGEAR_ENGINE_VERSION = "1.1.0";
+  const FORMGEAR_ENGINE_VERSION = "1.2.0";
   const FORMGEAR_SCHEMA_VERSION = "1.1.0";
 
   function bumpPatchVersion(version) {
@@ -391,11 +391,13 @@
       // Status mode-seleksi untuk fitur "pilih beberapa field yang sudah
       // ada -> jadikan grup berulang" (Grup Field Dinamis / Repeater).
       // Hanya satu section yang bisa dalam mode seleksi pada satu waktu.
-      // Sengaja dibatasi ke field level atas (depth 0) di dalam satu
-      // section saja - lihat catatan di createRepeaterGroupFromSelection().
+      // `paths` menampung path field terpilih di KEDALAMAN APA PUN (bukan
+      // cuma level atas) - lihat createRepeaterGroupFromSelection() untuk
+      // bagaimana konflik visibleIfValue diselesaikan secara presisi saat
+      // field bercampur kedalaman ikut dipilih.
       this.groupSelection = {
         sectionIndex: null,
-        indices: [],
+        paths: [],
         groupName: "",
         itemLabel: "",
       };
@@ -738,13 +740,13 @@
           const selectionBar = isSelecting
             ? `
                     <div class="repeater-group-toolbar">
-                        <span class="repeater-group-count"><i class="bi bi-check2-square"></i> ${this.groupSelection.indices.length} field terpilih</span>
+                        <span class="repeater-group-count"><i class="bi bi-check2-square"></i> ${this.groupSelection.paths.length} field terpilih</span>
                         <input type="text" placeholder="Nama grup (contoh: Kepala Keluarga)" value="${this.escapeHtml(this.groupSelection.groupName || "")}" onchange="FormGearBuilderInstance.updateGroupSelectionMeta('groupName', this.value)">
                         <input type="text" placeholder="Label 1 baris/item (contoh: Kepala Keluarga)" value="${this.escapeHtml(this.groupSelection.itemLabel || "")}" onchange="FormGearBuilderInstance.updateGroupSelectionMeta('itemLabel', this.value)">
                         <button class="btn-success" onclick="FormGearBuilderInstance.createRepeaterGroupFromSelection(${sectionIndex})"><i class="bi bi-arrow-repeat"></i> Jadikan Grup Berulang</button>
                         <button class="btn-outline" onclick="FormGearBuilderInstance.toggleGroupSelectMode(${sectionIndex})">Batal</button>
                     </div>
-                    <p class="field-type-hint"><i class="bi bi-info-circle"></i> Centang field level atas yang ingin digabung (misal: No. KK + Nama KK), lalu beri nama grup. Hanya field level atas (bukan child field) yang bisa dipilih, supaya aturan tampil-bersyarat (visibleIfValue) tidak bertabrakan.</p>
+                    <p class="field-type-hint"><i class="bi bi-info-circle"></i> Centang field yang ingin digabung — boleh field level atas maupun child field bersarang. Jika induk dicentang, seluruh child-nya otomatis ikut (tetap bersarang, tidak perlu dicentang satu-satu). Jika hanya sebagian child yang dicentang tanpa induknya, aturan tampil-bersyarat (visibleIfValue) child tersebut dilepas otomatis karena induk pilihannya tidak ikut pindah ke grup.</p>
                 `
             : "";
           return `
@@ -1085,16 +1087,24 @@
                 `;
       }
 
-      const groupSelectActive =
-        depth === 0 && this.groupSelection.sectionIndex === sectionIndex;
+      const groupSelectActive = this.groupSelection.sectionIndex === sectionIndex;
+      const currentPath = String(fieldIndex);
       const isSelectedForGroup =
-        groupSelectActive && this.groupSelection.indices.includes(fieldIndex);
+        groupSelectActive && this.groupSelection.paths.includes(currentPath);
+      // Field ini otomatis ikut ke grup karena salah satu leluhurnya
+      // (induk/kakek) sudah dicentang - seluruh subtree induk ikut
+      // pindah sebagai satu kesatuan, jadi mencentang field ini secara
+      // terpisah tidak diperlukan (dan diabaikan bila dicentang).
+      const isAutoIncludedViaAncestor =
+        groupSelectActive &&
+        !isSelectedForGroup &&
+        this.groupSelection.paths.some((p) => currentPath.indexOf(p + "-") === 0);
       const groupSelectRow = groupSelectActive
         ? `
                     <div class="repeater-select-row">
                         <label style="display:flex; align-items:center; gap:8px; margin-bottom:0;">
-                            <input type="checkbox" style="width:auto;" ${isSelectedForGroup ? "checked" : ""} onchange="FormGearBuilderInstance.toggleFieldForGroupSelection(${sectionIndex}, ${fieldIndex})">
-                            Pilih field ini untuk grup berulang
+                            <input type="checkbox" style="width:auto;" ${isSelectedForGroup || isAutoIncludedViaAncestor ? "checked" : ""} ${isAutoIncludedViaAncestor ? "disabled" : ""} onchange="FormGearBuilderInstance.toggleFieldForGroupSelection(${sectionIndex}, '${currentPath}')">
+                            ${isAutoIncludedViaAncestor ? "Ikut otomatis (induk sudah dipilih)" : "Pilih field ini untuk grup berulang"}
                         </label>
                     </div>
                 `
@@ -1289,26 +1299,20 @@
     // ------------------------------------------------------------------
     // GRUP FIELD DINAMIS / REPEATER
     // Fitur ergonomis di atas fondasi teknis "panel.repeatable": pilih
-    // beberapa field level-atas yang sudah ada di satu section, lalu
-    // jadikan satu grup berulang (panel baru dengan repeatable:true, field
-    // terpilih dipindah jadi children-nya). Sengaja dibatasi ke field
-    // level atas (depth 0) saja per section - field anak (depth > 0) bisa
-    // punya `visibleIfValue` yang bergantung pada induk pilihan (choice
-    // type) langsung di atasnya; membiarkan field semacam itu ikut dipilih
-    // lintas-level akan merusak relasi tampil-bersyarat tersebut begitu
-    // dipindah ke induk baru (panel, yang bukan choice type). Field level
-    // atas tidak pernah punya `visibleIfValue` yang berlaku (lihat editor
-    // di renderBuilderField, hanya tampil saat depth > 0), sehingga
-    // pembatasan ini otomatis menghindari konflik tersebut.
+    // beberapa field yang sudah ada (di kedalaman APA PUN - level atas
+    // maupun child field bersarang) lalu jadikan satu grup berulang (panel
+    // baru dengan repeatable:true, field terpilih dipindah jadi
+    // children-nya). Lihat createRepeaterGroupFromSelection() untuk
+    // bagaimana konflik `visibleIfValue` diselesaikan secara presisi.
     // ------------------------------------------------------------------
 
     toggleGroupSelectMode(sectionIndex) {
       if (this.groupSelection.sectionIndex === sectionIndex) {
-        this.groupSelection = { sectionIndex: null, indices: [], groupName: "", itemLabel: "" };
+        this.groupSelection = { sectionIndex: null, paths: [], groupName: "", itemLabel: "" };
       } else {
         this.groupSelection = {
           sectionIndex,
-          indices: [],
+          paths: [],
           groupName: "Grup Berulang Baru",
           itemLabel: "Item",
         };
@@ -1316,13 +1320,14 @@
       this.renderBuilderPage();
     }
 
-    toggleFieldForGroupSelection(sectionIndex, fieldIndex) {
+    toggleFieldForGroupSelection(sectionIndex, path) {
       if (this.groupSelection.sectionIndex !== sectionIndex) return;
-      const idx = this.groupSelection.indices.indexOf(fieldIndex);
+      const key = String(path);
+      const idx = this.groupSelection.paths.indexOf(key);
       if (idx === -1) {
-        this.groupSelection.indices.push(fieldIndex);
+        this.groupSelection.paths.push(key);
       } else {
-        this.groupSelection.indices.splice(idx, 1);
+        this.groupSelection.paths.splice(idx, 1);
       }
       this.renderBuilderPage();
     }
@@ -1332,30 +1337,110 @@
       this.renderBuilderPage();
     }
 
+    // Path-string helpers (path = indeks dash-joined, sama seperti skema
+    // getFieldByPath). Dipakai untuk menormalisasi seleksi sebelum
+    // dieksekusi - lihat createRepeaterGroupFromSelection().
+    isDescendantPath(childPath, ancestorPath) {
+      return childPath !== ancestorPath && childPath.indexOf(ancestorPath + "-") === 0;
+    }
+
+    comparePaths(a, b) {
+      const as = a.split("-").map(Number);
+      const bs = b.split("-").map(Number);
+      const len = Math.max(as.length, bs.length);
+      for (let i = 0; i < len; i += 1) {
+        const av = as[i] === undefined ? -1 : as[i];
+        const bv = bs[i] === undefined ? -1 : bs[i];
+        if (av !== bv) return av - bv;
+      }
+      return 0;
+    }
+
     createRepeaterGroupFromSelection(sectionIndex) {
       const section =
         this.currentForm && this.currentForm.sections && this.currentForm.sections[sectionIndex];
       if (!section) return;
 
-      const indices = (this.groupSelection.indices || []).slice().sort((a, b) => a - b);
-      if (!indices.length) {
-        showAlert("Pilih minimal 1 field level atas yang akan dijadikan grup berulang.");
+      const selectedPaths = (this.groupSelection.paths || []).slice();
+      if (!selectedPaths.length) {
+        showAlert("Pilih minimal 1 field (level atas atau child) yang akan dijadikan grup berulang.");
         return;
       }
+
+      // ------------------------------------------------------------
+      // 1) Normalisasi: buang path yang leluhurnya JUGA terpilih. Field
+      //    semacam itu tidak perlu (dan tidak boleh) diperlakukan sebagai
+      //    "root" independen - ia akan ikut pindah secara utuh sebagai
+      //    bagian dari subtree leluhurnya, tetap bersarang dengan induk
+      //    aslinya di dalam grup baru, sehingga relasi visibleIfValue-nya
+      //    (jika ada, relatif ke induk yang ikut pindah bersamanya) tetap
+      //    valid tanpa perlu disentuh sama sekali.
+      // ------------------------------------------------------------
+      const rootPaths = selectedPaths
+        .filter((p) => !selectedPaths.some((other) => other !== p && this.isDescendantPath(p, other)))
+        .sort((a, b) => this.comparePaths(a, b));
 
       const groupName = (this.groupSelection.groupName || "").trim() || "Grup Berulang";
       const itemLabel = (this.groupSelection.itemLabel || "").trim() || "Item";
 
-      const selectedFields = indices.map((i) => section.fields[i]);
-      // Konflik visibleIfValue: field yang dipindah menjadi child dari
-      // panel (bukan choice type) tidak lagi punya induk pilihan yang
-      // valid, jadi hapus sisa visibleIfValue lama (kalau ada) supaya
-      // tidak menyisakan aturan tampil-bersyarat yang sudah mati/menyesatkan.
-      selectedFields.forEach((f) => {
-        if (f && "visibleIfValue" in f) delete f.visibleIfValue;
+      // ------------------------------------------------------------
+      // 2) Resolusi referensi OBJEK (bukan cuma path) untuk tiap root,
+      //    SEBELUM mutasi apa pun terjadi. Karena field & array children
+      //    di JS adalah referensi, objek ini tetap valid & bisa dicari
+      //    lewat indexOf() apa pun urutan penghapusan lain yang terjadi
+      //    di tempat lain pada pohon form - ini yang membuat penghapusan
+      //    di langkah 4 presisi walau seleksi bercampur kedalaman.
+      // ------------------------------------------------------------
+      const rootEntries = rootPaths
+        .map((p) => {
+          const field = this.getFieldByPath(sectionIndex, p, 0);
+          if (!field) return null;
+          const segments = p.split("-");
+          const parentPath = segments.length > 1 ? segments.slice(0, -1).join("-") : null;
+          const parentContainer =
+            parentPath === null
+              ? section.fields
+              : (this.getFieldByPath(sectionIndex, parentPath, 0) || {}).children;
+          if (!Array.isArray(parentContainer)) return null;
+          return { path: p, field, parentContainer };
+        })
+        .filter(Boolean);
+
+      if (!rootEntries.length) {
+        showAlert("Field yang dipilih tidak valid, coba pilih ulang.");
+        return;
+      }
+
+      // ------------------------------------------------------------
+      // 3) Sisipkan placeholder di posisi field root PERTAMA (level atas)
+      //    supaya posisi sisip grup baru presisi walau nanti banyak
+      //    penghapusan terjadi di berbagai kedalaman/parent yang
+      //    berbeda-beda - placeholder ini ikut bergeser secara alami
+      //    mengikuti splice() lain seperti elemen array biasa, lalu
+      //    posisinya yang SEBENARNYA (setelah semua penghapusan selesai)
+      //    dicari kembali lewat indexOf() di langkah 5.
+      // ------------------------------------------------------------
+      const anchorTopLevelIndex = Number(rootPaths[0].split("-")[0]);
+      const placeholder = { __repeaterGroupPlaceholder: true };
+      section.fields.splice(anchorTopLevelIndex, 0, placeholder);
+
+      // ------------------------------------------------------------
+      // 4) Keluarkan tiap field root dari lokasi asalnya lewat identitas
+      //    objek (bukan indeks numerik basi), lalu selesaikan konflik
+      //    visibleIfValue SECARA PRESISI: hanya field root sendiri yang
+      //    dilepas relasinya (karena ia berpindah induk, dari apa pun
+      //    induk aslinya, menjadi anak langsung panel - yang bukan choice
+      //    type). Descendant yang ikut bersamanya (tersaring di langkah 1)
+      //    TIDAK disentuh visibleIfValue-nya karena induk langsungnya
+      //    tetap sama seperti semula.
+      // ------------------------------------------------------------
+      const selectedFields = rootEntries.map(({ field, parentContainer }) => {
+        const idx = parentContainer.indexOf(field);
+        if (idx !== -1) parentContainer.splice(idx, 1);
+        if (field && "visibleIfValue" in field) delete field.visibleIfValue;
+        return field;
       });
 
-      const insertAt = indices[0];
       const panelField = this.createNewField("panel");
       panelField.label = groupName;
       panelField.repeatable = true;
@@ -1364,17 +1449,19 @@
       panelField.repeatItemLabel = itemLabel;
       panelField.children = selectedFields;
 
-      // Hapus field asal dari posisi lama, mulai dari indeks terbesar
-      // supaya indeks yang lebih kecil tidak bergeser di tengah proses.
-      indices
-        .slice()
-        .sort((a, b) => b - a)
-        .forEach((i) => section.fields.splice(i, 1));
+      // ------------------------------------------------------------
+      // 5) Cari posisi placeholder yang sebenarnya (bisa saja sudah
+      //    bergeser akibat penghapusan root level-atas lain) lalu ganti
+      //    dengan panel berulang yang baru dibuat.
+      // ------------------------------------------------------------
+      const placeholderIndex = section.fields.indexOf(placeholder);
+      if (placeholderIndex === -1) {
+        section.fields.push(panelField);
+      } else {
+        section.fields.splice(placeholderIndex, 1, panelField);
+      }
 
-      // Sisipkan panel berulang baru di posisi field pertama yang dipilih.
-      section.fields.splice(insertAt, 0, panelField);
-
-      this.groupSelection = { sectionIndex: null, indices: [], groupName: "", itemLabel: "" };
+      this.groupSelection = { sectionIndex: null, paths: [], groupName: "", itemLabel: "" };
       this.renderBuilderPage();
     }
 
