@@ -364,6 +364,7 @@ Changelog entries live as a small inline note block inside the Settings `.app-in
 
 | Version | Change |
 |---|---|
+| v5.8.0 (addendum 2) | Added **Grup Field Dinamis / Repeater** to FormGear: a `panel` field can now be marked `repeatable` so its children render as N duplicable rows/instances at fill-time (e.g. multiple Kepala Keluarga per house). Bumped `FORMGEAR_ENGINE_VERSION`/`FORMGEAR_SCHEMA_VERSION` to `1.1.0` with an automatic migration in `migrateFormDefinition()` that back-fills `repeatable:false` on pre-existing panels. See §15.6. This does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself. |
 | v5.8.0 | Added independent Semantic Versioning for FormGear, see §15.5: `FORMGEAR_ENGINE_VERSION` (templating engine), `schemaVersion` (form-definition data shape), and a per-form `templateVersion` that auto-bumps PATCH on every save. Older forms are auto-migrated to the new fields on load via `migrateFormDefinition()`. This does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself. |
 | v5.7.0 (addendum) | Documented new FormGear advanced field types (`autonumber`, `customjs`) and their AI helper, see §15. This addendum does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself — it only documents the FormGear sub-module shipped alongside it (`assets/formgear/*`). |
 | v5.5.0 | Removed all emoji/emoticon usage app-wide in favor of Bootstrap Icons; documented the new cross-file Semantic Versioning policy and runtime version-sync mechanism between `index.html`, `sw.js`, and `manifest.json` (§12); updated §11 to reflect that the PWA shell (`manifest.json` + `sw.js`) now exists; removed the now-completed "PWA shell" item from §13. |
@@ -426,4 +427,31 @@ This mirrors, at a smaller scale, the same "runtime drift detection, no build st
 
 **Operational rule:** bump `FORMGEAR_ENGINE_VERSION` (MINOR for new capabilities, PATCH for bug fixes, MAJOR for breaking changes to the builder API surface itself) whenever `form-builder.js` changes; bump `FORMGEAR_SCHEMA_VERSION` (and add a migration branch) only when the stored form-definition shape changes incompatibly. Do **not** conflate either with `APP_VERSION` — a Saka Tracker release can ship with no FormGear changes at all, and vice versa.
 
+### 15.6 Grup Field Dinamis / Repeater (v1.1.0)
+
+**Problem it solves:** some real-world forms need a field group that can be duplicated an unknown number of times — the motivating case is *1 rumah bisa punya banyak Kepala Keluarga* (a house can have several household heads, each with their own No. KK + Nama KK, unbounded). Before v1.1.0, FormGear's `panel` type was a purely visual, single-instance container with no way to duplicate itself or its children.
+
+**Schema (foundation flag on `panel`):**
+
+| Property | Type | Meaning |
+|---|---|---|
+| `repeatable` | `boolean` | When `true`, this panel's `children` render as N duplicable rows/instances instead of one static block. Default `false` (plain panel, unchanged behavior). |
+| `repeatItemLabel` | `string` | Singular label for one row, used in the "Tambah {label}" button and each row's `"{label} #N"` header (e.g. `"Kepala Keluarga"`). |
+| `repeatMin` | `number` | Minimum instances required; the form always starts with `max(repeatMin, 1)` rows and the "Hapus" button on a row is disabled once the count reaches this floor. Submission is blocked with an inline error on the group if fewer rows are present. |
+| `repeatMax` | `number` | Maximum instances allowed; `0` means unlimited. The "Tambah" button is blocked (with an alert) once this ceiling is reached. |
+
+Old forms saved before this property existed are back-filled with `repeatable:false` by `ensureRepeaterDefaults()`, invoked from `migrateFormDefinition()`'s `"0.9.0"`/`"1.0.0"` → `"1.1.0"` branch — see §15.5.
+
+**Builder ergonomics (built on top of the flag):** rather than only being able to hand-configure a *new* panel as repeatable, a section toolbar button *"Pilih Field untuk Grup Berulang"* puts that section into a selection mode (`this.groupSelection`): checkboxes appear next to each **top-level** field in the section, plus an inline bar to type a group name and an item label. *"Jadikan Grup Berulang"* (`createRepeaterGroupFromSelection()`) then creates a new `repeatable` panel, moves the checked fields into it as `children` (preserving their relative order), and inserts the panel at the position of the first field that was checked. The reverse operation, *"Ubah jadi Field Biasa (Ungroup)"* (`ungroupRepeaterField()`), splices a repeatable panel's children back out to its parent's level and deletes the panel.
+
+- **Why selection is restricted to top-level (depth 0) fields only:** a child field's `visibleIfValue` is only meaningful relative to its *immediate* choice-type parent (see §11-ish conditional-visibility logic). Top-level fields never carry a live `visibleIfValue` in the current builder UI (the editor for it only appears at `depth > 0`), so grouping only top-level siblings structurally guarantees there is no existing conditional-visibility relationship to break. Both grouping and ungrouping additionally strip any stale `visibleIfValue` left over from prior nesting, as defensive cleanup.
+- Nesting a repeatable panel's children further (e.g. a choice field inside a group whose *own* children have `visibleIfValue`) is not exposed through the selection UI, but works at the data/render level since the recursive renderer and `updateConditionalVisibility()` walk are repeater-aware (see below) — it can be built by hand-editing a group's children in the builder if ever needed.
+
+**Runtime rendering & interaction (`renderRepeaterPanelBlock`/`renderRepeaterInstance`):** each row/instance gets its own DOM path, `` `${panelPath}.${instanceIndex}` `` (note the `.` separator, deliberately distinct from the `-`-only path scheme the builder's `getFieldByPath()` parses, so the two never collide). *"Tambah {label}"* appends a new row (index = highest existing instance index + 1, **not** the current row count, so it can't collide with a lower index left behind by an earlier deletion); *"Hapus"* removes one row's DOM node outright (no soft-hide/reindexing — unlike §3's cross-session roster design, a repeater row that's deleted is simply gone, and remaining rows keep their original path/index so their already-entered data and any `fileDataStore`/`signatureDataStore` entries stay valid). Row headers are renumbered `"#1, #2, ..."` for display after every add/remove; the underlying path/index is untouched. Widgets that need per-element wiring (rating, boolean, tagbox, imagepicker, ranking, file upload, signature pad) are re-wired for just the new row via the extracted `wireControlWidgets(scopeEl, container, formDef)` helper — native `change`/`input` events for ordinary inputs work automatically because those listeners are delegated to the whole form container.
+
+**Submission shape:** `collectSubmissionData()` recognizes a repeatable panel and outputs an **array of one object per row** on that field's `name` key (each row's own field values keyed as usual), rather than flattening into the parent object. Rows below `repeatMin` produce a blocking inline error on the group itself.
+
+**Known limitation (by design):** `collectAllFieldValues()`/`recalculateComputedFields()` (used by `autonumber`/`customjs` field types) deliberately do **not** descend into a repeatable panel's children — a Custom JS Column formula can't reference a value that may exist zero-to-many times per submission. Auto Number and Custom JS Column can only see fields that live outside a repeater group.
+
 ---
+

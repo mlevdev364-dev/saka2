@@ -30,8 +30,8 @@
   // Ringkasan tiga lapis versi yang TIDAK saling terikat:
   //   APP_VERSION (index.html)  != FORMGEAR_ENGINE_VERSION (engine ini)
   //   != FORMGEAR_SCHEMA_VERSION (bentuk data)  != templateVersion (per-form)
-  const FORMGEAR_ENGINE_VERSION = "1.0.0";
-  const FORMGEAR_SCHEMA_VERSION = "1.0.0";
+  const FORMGEAR_ENGINE_VERSION = "1.1.0";
+  const FORMGEAR_SCHEMA_VERSION = "1.1.0";
 
   function bumpPatchVersion(version) {
     const parts = String(version || "1.0.0")
@@ -41,6 +41,28 @@
     const safe = parts.map((n) => (Number.isFinite(n) && n >= 0 ? n : 0));
     safe[2] += 1;
     return safe.join(".");
+  }
+
+  // v1.1.0: memastikan setiap field bertipe "panel" (lama maupun baru)
+  // punya properti repeater (`repeatable`/`repeatMin`/`repeatMax`/
+  // `repeatItemLabel`) yang terdefinisi secara eksplisit, supaya form yang
+  // dibuat sebelum fitur "Grup Field Dinamis / Repeater" ada tetap aman
+  // dimuat (default: bukan grup berulang).
+  function ensureRepeaterDefaults(fields) {
+    (fields || []).forEach((f) => {
+      if (!f || typeof f !== "object") return;
+      if (f.type === "panel") {
+        f.repeatable = !!f.repeatable;
+        if (f.repeatable) {
+          f.repeatMin = Number.isFinite(f.repeatMin) ? Math.max(0, f.repeatMin) : 1;
+          f.repeatMax = Number.isFinite(f.repeatMax) ? Math.max(0, f.repeatMax) : 0;
+          f.repeatItemLabel = f.repeatItemLabel || "Item";
+        }
+      }
+      if (Array.isArray(f.children) && f.children.length) {
+        ensureRepeaterDefaults(f.children);
+      }
+    });
   }
 
   // Migrasi form definition lama (dibuat sebelum FORMGEAR_SCHEMA_VERSION
@@ -60,6 +82,10 @@
     //   ...langkah upgrade skema...
     //   def.schemaVersion = "1.0.0";
     // }
+    if (def.schemaVersion === "0.9.0" || def.schemaVersion === "1.0.0") {
+      (def.sections || []).forEach((section) => ensureRepeaterDefaults(section.fields));
+      def.schemaVersion = FORMGEAR_SCHEMA_VERSION;
+    }
     return def;
   }
 
@@ -362,6 +388,17 @@
       // status "loading"/"error"/"done" tanpa kehilangan input pengguna.
       this.aiCodeState = {};
       this.aiTemplateState = { status: "idle", message: "" };
+      // Status mode-seleksi untuk fitur "pilih beberapa field yang sudah
+      // ada -> jadikan grup berulang" (Grup Field Dinamis / Repeater).
+      // Hanya satu section yang bisa dalam mode seleksi pada satu waktu.
+      // Sengaja dibatasi ke field level atas (depth 0) di dalam satu
+      // section saja - lihat catatan di createRepeaterGroupFromSelection().
+      this.groupSelection = {
+        sectionIndex: null,
+        indices: [],
+        groupName: "",
+        itemLabel: "",
+      };
     }
 
     initFormGear() {
@@ -518,8 +555,25 @@
               : DEFAULT_CUSTOMJS_CODE;
           field.required = false;
           break;
-        case "signaturepad":
         case "panel":
+          // Grup Field Dinamis / Repeater: sebuah panel bisa ditandai
+          // "berulang" (repeatable) supaya field-field di dalamnya dapat
+          // digandakan berkali-kali oleh pengisi form (contoh kasus: 1
+          // rumah punya banyak Kepala Keluarga). Defaultnya bukan grup
+          // berulang (repeatable: false) agar panel biasa tidak berubah
+          // perilaku.
+          field.repeatable = !!field.repeatable;
+          if (field.repeatable) {
+            field.repeatMin = Number.isFinite(field.repeatMin)
+              ? Math.max(0, field.repeatMin)
+              : 1;
+            field.repeatMax = Number.isFinite(field.repeatMax)
+              ? Math.max(0, field.repeatMax)
+              : 0; // 0 = tanpa batas
+            field.repeatItemLabel = field.repeatItemLabel || "Item";
+          }
+          break;
+        case "signaturepad":
         default:
           break;
       }
@@ -679,13 +733,30 @@
         return '<p style="color: var(--text-muted);">Tidak ada section.</p>';
       }
       return formDef.sections
-        .map(
-          (section, sectionIndex) => `
+        .map((section, sectionIndex) => {
+          const isSelecting = this.groupSelection.sectionIndex === sectionIndex;
+          const selectionBar = isSelecting
+            ? `
+                    <div class="repeater-group-toolbar">
+                        <span class="repeater-group-count"><i class="bi bi-check2-square"></i> ${this.groupSelection.indices.length} field terpilih</span>
+                        <input type="text" placeholder="Nama grup (contoh: Kepala Keluarga)" value="${this.escapeHtml(this.groupSelection.groupName || "")}" onchange="FormGearBuilderInstance.updateGroupSelectionMeta('groupName', this.value)">
+                        <input type="text" placeholder="Label 1 baris/item (contoh: Kepala Keluarga)" value="${this.escapeHtml(this.groupSelection.itemLabel || "")}" onchange="FormGearBuilderInstance.updateGroupSelectionMeta('itemLabel', this.value)">
+                        <button class="btn-success" onclick="FormGearBuilderInstance.createRepeaterGroupFromSelection(${sectionIndex})"><i class="bi bi-arrow-repeat"></i> Jadikan Grup Berulang</button>
+                        <button class="btn-outline" onclick="FormGearBuilderInstance.toggleGroupSelectMode(${sectionIndex})">Batal</button>
+                    </div>
+                    <p class="field-type-hint"><i class="bi bi-info-circle"></i> Centang field level atas yang ingin digabung (misal: No. KK + Nama KK), lalu beri nama grup. Hanya field level atas (bukan child field) yang bisa dipilih, supaya aturan tampil-bersyarat (visibleIfValue) tidak bertabrakan.</p>
+                `
+            : "";
+          return `
                 <div class="formgear-builder-section" id="builder-section-${sectionIndex}">
                     <div class="section-header">
                         <strong class="section-title">Section ${sectionIndex + 1}</strong>
-                        <button class="btn-danger" onclick="FormGearBuilderInstance.removeBuilderSection(${sectionIndex})"><i class="bi bi-trash3"></i> Hapus Section</button>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn-outline" style="width:auto; margin-top:0;" onclick="FormGearBuilderInstance.toggleGroupSelectMode(${sectionIndex})"><i class="bi bi-collection"></i> ${isSelecting ? "Batal Pilih Field" : "Pilih Field untuk Grup Berulang"}</button>
+                            <button class="btn-danger" onclick="FormGearBuilderInstance.removeBuilderSection(${sectionIndex})"><i class="bi bi-trash3"></i> Hapus Section</button>
+                        </div>
                     </div>
+                    ${selectionBar}
                     <div class="formgear-builder-row">
                         <div>
                             <label>Judul Section</label>
@@ -699,8 +770,8 @@
                     ${this.renderBuilderFields(section, sectionIndex)}
                     <button class="btn-outline" onclick="FormGearBuilderInstance.addBuilderField(${sectionIndex})"><i class="bi bi-plus-lg"></i> Tambah Field</button>
                 </div>
-            `,
-        )
+            `;
+        })
         .join("");
     }
 
@@ -942,6 +1013,48 @@
                 `;
       }
 
+      if (field.type === "panel") {
+        const hasChildren = Array.isArray(field.children) && field.children.length > 0;
+        return `
+                    <div class="formgear-builder-row">
+                        <div>
+                            <label style="display:flex; align-items:center; gap:8px; margin-top:22px;">
+                                <input type="checkbox" style="width:auto;" ${field.repeatable ? "checked" : ""} onchange="${onChangeChecked("repeatable")}">
+                                Field Berulang (Repeater)
+                            </label>
+                        </div>
+                        ${
+                          field.repeatable
+                            ? `
+                        <div>
+                            <label>Label 1 Item (contoh: "Kepala Keluarga")</label>
+                            <input type="text" value="${this.escapeHtml(field.repeatItemLabel || "Item")}" onchange="${onChange("repeatItemLabel")}">
+                        </div>
+                        <div>
+                            <label>Minimal Instance</label>
+                            <input type="number" min="0" value="${Number.isFinite(field.repeatMin) ? field.repeatMin : 1}" onchange="${onChange("repeatMin")}">
+                        </div>
+                        <div>
+                            <label>Maksimal Instance (0 = tanpa batas)</label>
+                            <input type="number" min="0" value="${Number.isFinite(field.repeatMax) ? field.repeatMax : 0}" onchange="${onChange("repeatMax")}">
+                        </div>`
+                            : ""
+                        }
+                    </div>
+                    ${
+                      field.repeatable
+                        ? `
+                    <p class="field-type-hint"><i class="bi bi-info-circle"></i> Pengisi form dapat menambah/menghapus baris "${this.escapeHtml(field.repeatItemLabel || "Item")}" ini berulang kali (contoh: banyak Kepala Keluarga dalam 1 rumah). Semua field di dalam grup ini digandakan per baris.</p>
+                    ${
+                      hasChildren
+                        ? `<button type="button" class="btn-outline" style="width:auto;" onclick="FormGearBuilderInstance.ungroupRepeaterField(${sectionIndex}, '${path}', ${depth})"><i class="bi bi-box-arrow-up"></i> Ubah jadi Field Biasa (Ungroup)</button>`
+                        : ""
+                    }`
+                        : ""
+                    }
+                `;
+      }
+
       return "";
     }
 
@@ -972,8 +1085,24 @@
                 `;
       }
 
+      const groupSelectActive =
+        depth === 0 && this.groupSelection.sectionIndex === sectionIndex;
+      const isSelectedForGroup =
+        groupSelectActive && this.groupSelection.indices.includes(fieldIndex);
+      const groupSelectRow = groupSelectActive
+        ? `
+                    <div class="repeater-select-row">
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:0;">
+                            <input type="checkbox" style="width:auto;" ${isSelectedForGroup ? "checked" : ""} onchange="FormGearBuilderInstance.toggleFieldForGroupSelection(${sectionIndex}, ${fieldIndex})">
+                            Pilih field ini untuk grup berulang
+                        </label>
+                    </div>
+                `
+        : "";
+
       return `
-                <div class="formgear-builder-field" style="${indentStyle}">
+                <div class="formgear-builder-field${isSelectedForGroup ? " repeater-select-checked" : ""}" style="${indentStyle}">
+                    ${groupSelectRow}
                     <div class="formgear-builder-row">
                         <div>
                             <label>
@@ -1077,7 +1206,13 @@
         case "autoStart":
         case "autoStep":
         case "autoPadding":
+        case "repeatMin":
+        case "repeatMax":
           field[key] = Number(value);
+          break;
+        case "repeatable":
+          field.repeatable = !!value;
+          this.applyTypeDefaults(field);
           break;
         default:
           field[key] = value;
@@ -1148,6 +1283,125 @@
       if (!field) return;
       field.children = field.children || [];
       field.children.push(this.createNewField());
+      this.renderBuilderPage();
+    }
+
+    // ------------------------------------------------------------------
+    // GRUP FIELD DINAMIS / REPEATER
+    // Fitur ergonomis di atas fondasi teknis "panel.repeatable": pilih
+    // beberapa field level-atas yang sudah ada di satu section, lalu
+    // jadikan satu grup berulang (panel baru dengan repeatable:true, field
+    // terpilih dipindah jadi children-nya). Sengaja dibatasi ke field
+    // level atas (depth 0) saja per section - field anak (depth > 0) bisa
+    // punya `visibleIfValue` yang bergantung pada induk pilihan (choice
+    // type) langsung di atasnya; membiarkan field semacam itu ikut dipilih
+    // lintas-level akan merusak relasi tampil-bersyarat tersebut begitu
+    // dipindah ke induk baru (panel, yang bukan choice type). Field level
+    // atas tidak pernah punya `visibleIfValue` yang berlaku (lihat editor
+    // di renderBuilderField, hanya tampil saat depth > 0), sehingga
+    // pembatasan ini otomatis menghindari konflik tersebut.
+    // ------------------------------------------------------------------
+
+    toggleGroupSelectMode(sectionIndex) {
+      if (this.groupSelection.sectionIndex === sectionIndex) {
+        this.groupSelection = { sectionIndex: null, indices: [], groupName: "", itemLabel: "" };
+      } else {
+        this.groupSelection = {
+          sectionIndex,
+          indices: [],
+          groupName: "Grup Berulang Baru",
+          itemLabel: "Item",
+        };
+      }
+      this.renderBuilderPage();
+    }
+
+    toggleFieldForGroupSelection(sectionIndex, fieldIndex) {
+      if (this.groupSelection.sectionIndex !== sectionIndex) return;
+      const idx = this.groupSelection.indices.indexOf(fieldIndex);
+      if (idx === -1) {
+        this.groupSelection.indices.push(fieldIndex);
+      } else {
+        this.groupSelection.indices.splice(idx, 1);
+      }
+      this.renderBuilderPage();
+    }
+
+    updateGroupSelectionMeta(key, value) {
+      this.groupSelection[key] = value;
+      this.renderBuilderPage();
+    }
+
+    createRepeaterGroupFromSelection(sectionIndex) {
+      const section =
+        this.currentForm && this.currentForm.sections && this.currentForm.sections[sectionIndex];
+      if (!section) return;
+
+      const indices = (this.groupSelection.indices || []).slice().sort((a, b) => a - b);
+      if (!indices.length) {
+        showAlert("Pilih minimal 1 field level atas yang akan dijadikan grup berulang.");
+        return;
+      }
+
+      const groupName = (this.groupSelection.groupName || "").trim() || "Grup Berulang";
+      const itemLabel = (this.groupSelection.itemLabel || "").trim() || "Item";
+
+      const selectedFields = indices.map((i) => section.fields[i]);
+      // Konflik visibleIfValue: field yang dipindah menjadi child dari
+      // panel (bukan choice type) tidak lagi punya induk pilihan yang
+      // valid, jadi hapus sisa visibleIfValue lama (kalau ada) supaya
+      // tidak menyisakan aturan tampil-bersyarat yang sudah mati/menyesatkan.
+      selectedFields.forEach((f) => {
+        if (f && "visibleIfValue" in f) delete f.visibleIfValue;
+      });
+
+      const insertAt = indices[0];
+      const panelField = this.createNewField("panel");
+      panelField.label = groupName;
+      panelField.repeatable = true;
+      panelField.repeatMin = 1;
+      panelField.repeatMax = 0;
+      panelField.repeatItemLabel = itemLabel;
+      panelField.children = selectedFields;
+
+      // Hapus field asal dari posisi lama, mulai dari indeks terbesar
+      // supaya indeks yang lebih kecil tidak bergeser di tengah proses.
+      indices
+        .slice()
+        .sort((a, b) => b - a)
+        .forEach((i) => section.fields.splice(i, 1));
+
+      // Sisipkan panel berulang baru di posisi field pertama yang dipilih.
+      section.fields.splice(insertAt, 0, panelField);
+
+      this.groupSelection = { sectionIndex: null, indices: [], groupName: "", itemLabel: "" };
+      this.renderBuilderPage();
+    }
+
+    ungroupRepeaterField(sectionIndex, path, depth) {
+      if (!this.currentForm) return;
+      const field = this.getFieldByPath(sectionIndex, path, depth);
+      if (!field || field.type !== "panel") return;
+
+      const children = Array.isArray(field.children) ? field.children.slice() : [];
+      // Field ini kembali jadi sibling biasa di level induknya (yang
+      // bukan choice type juga, karena berasal dari dalam panel) -
+      // bersihkan visibleIfValue basi yang mungkin masih menempel.
+      children.forEach((c) => {
+        if (c && "visibleIfValue" in c) delete c.visibleIfValue;
+      });
+
+      const indices = String(path).split("-").map(Number);
+      if (indices.length === 1) {
+        const section = this.currentForm.sections[sectionIndex];
+        if (!section) return;
+        section.fields.splice(indices[0], 1, ...children);
+      } else {
+        const parentPath = indices.slice(0, -1).join("-");
+        const parent = this.getFieldByPath(sectionIndex, parentPath, depth - 1);
+        if (!parent || !Array.isArray(parent.children)) return;
+        parent.children.splice(indices[indices.length - 1], 1, ...children);
+      }
       this.renderBuilderPage();
     }
 
@@ -1264,6 +1518,9 @@
       }
 
       if (field.type === "panel") {
+        if (field.repeatable) {
+          return this.renderRepeaterPanelBlock(field, path, opts);
+        }
         return `
                     <div class="panel-field-block">
                         <div class="panel-field-title">${this.escapeHtml(field.label || "Panel")}</div>
@@ -1304,6 +1561,93 @@
                     ${control}
                     ${childrenHtml}
                     ${!disabled ? `<div class="field-error" data-field-error="${path}"></div>` : ""}
+                </div>
+            `;
+    }
+
+    // ------------------------------------------------------------------
+    // GRUP FIELD DINAMIS / REPEATER - rendering
+    // Sebuah panel dengan field.repeatable === true dirender sebagai N
+    // instance (baris) dari field.children, masing-masing dengan path DOM
+    // sendiri (`${panelPath}.${instanceIndex}-${childIndex}`, dipisah "."
+    // supaya tidak pernah bertabrakan dengan skema path dash-only yang
+    // dipakai builder/getFieldByPath). Di mode preview (disabled) hanya 1
+    // contoh baris ditampilkan tanpa kontrol tambah/hapus, karena preview
+    // memang non-interaktif.
+    // ------------------------------------------------------------------
+    renderRepeaterPanelBlock(field, path, opts) {
+      const disabled = !!opts.disabled;
+      const min = Number.isFinite(field.repeatMin) ? Math.max(0, field.repeatMin) : 1;
+      const max = Number.isFinite(field.repeatMax) ? Math.max(0, field.repeatMax) : 0;
+      const itemLabel = field.repeatItemLabel || "Item";
+
+      if (disabled) {
+        const sampleHtml = this.renderRepeaterInstance(field, path, 0, min, 1, opts);
+        return `
+                    <div class="panel-field-block repeater-panel-block">
+                        <div class="panel-field-title">
+                            ${this.escapeHtml(field.label || "Panel")}
+                            <span class="repeater-badge"><i class="bi bi-arrow-repeat"></i> Berulang &middot; ${this.escapeHtml(itemLabel)}</span>
+                        </div>
+                        <p class="field-type-hint"><i class="bi bi-info-circle"></i> Contoh 1 baris. Saat form diisi, pengguna dapat menambah baris "${this.escapeHtml(itemLabel)}" lain.</p>
+                        ${
+                          field.children && field.children.length
+                            ? sampleHtml
+                            : '<p style="color:var(--text-muted); font-size:0.82rem;">Grup berulang ini belum punya field.</p>'
+                        }
+                    </div>
+                `;
+      }
+
+      const initialCount = Math.max(min, 1);
+      const instancesHtml = this.renderRepeaterInstances(field, path, initialCount, opts);
+
+      return `
+                <div class="panel-field-block repeater-panel-block field-preview" data-field-key="${path}" data-repeater-path="${path}" data-repeater-min="${min}" data-repeater-max="${max}">
+                    <div class="panel-field-title">
+                        ${this.escapeHtml(field.label || "Panel")}
+                        <span class="repeater-badge"><i class="bi bi-arrow-repeat"></i> Berulang</span>
+                    </div>
+                    <div class="repeater-instances" data-repeater-instances="${path}">
+                        ${instancesHtml}
+                    </div>
+                    <button type="button" class="btn-outline repeater-add-btn" style="width:auto;" data-repeater-add="${path}"><i class="bi bi-plus-lg"></i> Tambah ${this.escapeHtml(itemLabel)}</button>
+                    <div class="field-error" data-field-error="${path}"></div>
+                </div>
+            `;
+    }
+
+    renderRepeaterInstances(field, path, count, opts) {
+      const min = Number.isFinite(field.repeatMin) ? Math.max(0, field.repeatMin) : 1;
+      const html = [];
+      for (let i = 0; i < count; i += 1) {
+        html.push(this.renderRepeaterInstance(field, path, i, min, count, opts));
+      }
+      return html.join("");
+    }
+
+    renderRepeaterInstance(field, path, instanceIndex, min, currentCount, opts) {
+      const disabled = !!opts.disabled;
+      const instancePath = `${path}.${instanceIndex}`;
+      const itemLabel = this.escapeHtml(field.repeatItemLabel || "Item");
+      const childrenHtml =
+        field.children && field.children.length
+          ? disabled
+            ? this.renderPreviewFields(field.children, instancePath)
+            : this.renderFormFieldInputs(field.children, instancePath, field)
+          : '<p style="color:var(--text-muted); font-size:0.82rem;">Belum ada field di dalam grup ini.</p>';
+
+      const removeBtn = disabled
+        ? ""
+        : `<button type="button" class="btn-danger repeater-remove-btn" style="width:auto; margin-top:0;" data-repeater-remove="${path}" data-instance-index="${instanceIndex}" ${currentCount <= min ? "disabled" : ""}><i class="bi bi-trash3"></i> Hapus</button>`;
+
+      return `
+                <div class="repeater-instance" data-repeater-instance="${path}" data-instance-index="${instanceIndex}">
+                    <div class="repeater-instance-header">
+                        <span class="repeater-instance-label">${itemLabel} #${instanceIndex + 1}</span>
+                        ${removeBtn}
+                    </div>
+                    <div class="formgear-builder-children">${childrenHtml}</div>
                 </div>
             `;
     }
@@ -1528,72 +1872,16 @@
     // kondisional (visibleIf sederhana).
     // ------------------------------------------------------------------
     wireFormFieldEvents(container, formDef) {
-      // Rating
-      container.querySelectorAll('[data-field-type="rating"]').forEach((el) => {
-        el.addEventListener("click", (e) => {
-          const btn = e.target.closest(".rating-btn");
-          if (!btn) return;
-          el.querySelectorAll(".rating-btn").forEach((b) => b.classList.remove("active"));
-          btn.classList.add("active");
-          this.refreshFormState(container, formDef);
-        });
-      });
-
-      // Boolean segmented control
-      container.querySelectorAll('[data-field-type="boolean"]').forEach((el) => {
-        el.addEventListener("click", (e) => {
-          const btn = e.target.closest(".bool-btn");
-          if (!btn) return;
-          el.querySelectorAll(".bool-btn").forEach((b) => b.classList.remove("active"));
-          btn.classList.add("active");
-          this.refreshFormState(container, formDef);
-        });
-      });
-
-      // Tag box (multi-select chip)
-      container.querySelectorAll('[data-field-type="tagbox"]').forEach((el) => {
-        el.addEventListener("click", (e) => {
-          const chip = e.target.closest(".tag-chip");
-          if (!chip) return;
-          chip.classList.toggle("active");
-          this.refreshFormState(container, formDef);
-        });
-      });
-
-      // Image picker (single-select)
-      container.querySelectorAll('[data-field-type="imagepicker"]').forEach((el) => {
-        el.addEventListener("click", (e) => {
-          const item = e.target.closest(".imagepicker-item");
-          if (!item) return;
-          el.querySelectorAll(".imagepicker-item").forEach((b) => b.classList.remove("active"));
-          item.classList.add("active");
-          this.refreshFormState(container, formDef);
-        });
-      });
-
-      // Ranking (reorder via tombol naik/turun)
-      container.querySelectorAll('[data-field-type="ranking"]').forEach((el) => {
-        el.addEventListener("click", (e) => {
-          const upBtn = e.target.closest(".ranking-up");
-          const downBtn = e.target.closest(".ranking-down");
-          if (!upBtn && !downBtn) return;
-          const li = e.target.closest(".ranking-item");
-          if (!li) return;
-          if (upBtn && li.previousElementSibling) {
-            el.insertBefore(li, li.previousElementSibling);
-          } else if (downBtn && li.nextElementSibling) {
-            el.insertBefore(li.nextElementSibling, li);
-          }
-          el.querySelectorAll(".ranking-item").forEach((item, idx) => {
-            const indexEl = item.querySelector(".ranking-index");
-            if (indexEl) indexEl.textContent = String(idx + 1);
-          });
-          this.refreshFormState(container, formDef);
-        });
-      });
+      // Kontrol berbasis tombol/canvas yang butuh addEventListener per
+      // elemen (bukan cuma delegasi) -- dipisah ke wireControlWidgets()
+      // supaya bisa dipanggil ulang untuk instance repeater baru yang
+      // ditambahkan belakangan (lihat addRepeaterInstance()).
+      this.wireControlWidgets(container, container, formDef);
 
       // Radio / checkbox / dropdown / text change -> re-evaluasi visibilitas
-      // & kolom terhitung (autonumber/customjs).
+      // & kolom terhitung (autonumber/customjs). Didelegasikan ke container
+      // sehingga otomatis berlaku juga untuk elemen yang ditambahkan
+      // belakangan (misal baris baru pada grup berulang / repeater).
       container.addEventListener("change", (e) => {
         this.clearFieldError(container, e.target && e.target.closest(".field-preview[data-field-key]"));
         this.refreshFormState(container, formDef);
@@ -1615,8 +1903,112 @@
         this.clearFieldError(container, e.target && e.target.closest(".field-preview[data-field-key]"));
       });
 
+      // Grup Field Dinamis / Repeater: tambah & hapus baris/instance.
+      // Didelegasikan ke container (bukan per-elemen) karena tombol
+      // "Tambah" & "Hapus" bisa muncul kapan saja seiring baris baru
+      // ditambahkan.
+      container.addEventListener("click", (e) => {
+        const addBtn = e.target.closest("[data-repeater-add]");
+        if (addBtn) {
+          this.addRepeaterInstance(container, formDef, addBtn.dataset.repeaterAdd);
+          return;
+        }
+        const removeBtn = e.target.closest("[data-repeater-remove]");
+        if (removeBtn) {
+          this.removeRepeaterInstance(
+            container,
+            formDef,
+            removeBtn.dataset.repeaterRemove,
+            Number(removeBtn.dataset.instanceIndex),
+          );
+        }
+      });
+
+      // Evaluasi awal visibilitas kondisional + kolom terhitung
+      this.refreshFormState(container, formDef);
+    }
+
+    // Wiring untuk kontrol yang butuh addEventListener langsung per elemen
+    // (bukan delegasi ke container): rating, boolean, tagbox, imagepicker,
+    // ranking, file upload, signature pad. Menerima `scopeEl` terpisah dari
+    // `container` supaya bisa dipanggil ulang hanya untuk sub-tree DOM baru
+    // (misal satu baris repeater yang baru ditambahkan) tanpa mengulang
+    // wiring elemen yang sudah ada. Ditandai `dataset.wired` sebagai
+    // pengaman terhadap pemanggilan ganda pada elemen yang sama.
+    wireControlWidgets(scopeEl, container, formDef) {
+      scopeEl.querySelectorAll('[data-field-type="rating"]').forEach((el) => {
+        if (el.dataset.repeaterWired === "1") return;
+        el.dataset.repeaterWired = "1";
+        el.addEventListener("click", (e) => {
+          const btn = e.target.closest(".rating-btn");
+          if (!btn) return;
+          el.querySelectorAll(".rating-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          this.refreshFormState(container, formDef);
+        });
+      });
+
+      scopeEl.querySelectorAll('[data-field-type="boolean"]').forEach((el) => {
+        if (el.dataset.repeaterWired === "1") return;
+        el.dataset.repeaterWired = "1";
+        el.addEventListener("click", (e) => {
+          const btn = e.target.closest(".bool-btn");
+          if (!btn) return;
+          el.querySelectorAll(".bool-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          this.refreshFormState(container, formDef);
+        });
+      });
+
+      scopeEl.querySelectorAll('[data-field-type="tagbox"]').forEach((el) => {
+        if (el.dataset.repeaterWired === "1") return;
+        el.dataset.repeaterWired = "1";
+        el.addEventListener("click", (e) => {
+          const chip = e.target.closest(".tag-chip");
+          if (!chip) return;
+          chip.classList.toggle("active");
+          this.refreshFormState(container, formDef);
+        });
+      });
+
+      scopeEl.querySelectorAll('[data-field-type="imagepicker"]').forEach((el) => {
+        if (el.dataset.repeaterWired === "1") return;
+        el.dataset.repeaterWired = "1";
+        el.addEventListener("click", (e) => {
+          const item = e.target.closest(".imagepicker-item");
+          if (!item) return;
+          el.querySelectorAll(".imagepicker-item").forEach((b) => b.classList.remove("active"));
+          item.classList.add("active");
+          this.refreshFormState(container, formDef);
+        });
+      });
+
+      scopeEl.querySelectorAll('[data-field-type="ranking"]').forEach((el) => {
+        if (el.dataset.repeaterWired === "1") return;
+        el.dataset.repeaterWired = "1";
+        el.addEventListener("click", (e) => {
+          const upBtn = e.target.closest(".ranking-up");
+          const downBtn = e.target.closest(".ranking-down");
+          if (!upBtn && !downBtn) return;
+          const li = e.target.closest(".ranking-item");
+          if (!li) return;
+          if (upBtn && li.previousElementSibling) {
+            el.insertBefore(li, li.previousElementSibling);
+          } else if (downBtn && li.nextElementSibling) {
+            el.insertBefore(li.nextElementSibling, li);
+          }
+          el.querySelectorAll(".ranking-item").forEach((item, idx) => {
+            const indexEl = item.querySelector(".ranking-index");
+            if (indexEl) indexEl.textContent = String(idx + 1);
+          });
+          this.refreshFormState(container, formDef);
+        });
+      });
+
       // File upload (async, dibaca sebagai base64)
-      container.querySelectorAll("[data-file-input]").forEach((input) => {
+      scopeEl.querySelectorAll("[data-file-input]").forEach((input) => {
+        if (input.dataset.repeaterWired === "1") return;
+        input.dataset.repeaterWired = "1";
         input.addEventListener("change", (e) => {
           const path = input.dataset.fileInput;
           const files = Array.from(e.target.files || []);
@@ -1645,7 +2037,9 @@
       });
 
       // Signature pad (canvas menggambar dengan pointer events)
-      container.querySelectorAll("[data-signature-canvas]").forEach((canvas) => {
+      scopeEl.querySelectorAll("[data-signature-canvas]").forEach((canvas) => {
+        if (canvas.dataset.repeaterWired === "1") return;
+        canvas.dataset.repeaterWired = "1";
         const path = canvas.dataset.signatureCanvas;
         const ctx = canvas.getContext("2d");
         ctx.strokeStyle = "#f1f5f9";
@@ -1683,7 +2077,9 @@
         canvas.addEventListener("pointerleave", endStroke);
       });
 
-      container.querySelectorAll("[data-signature-clear]").forEach((btn) => {
+      scopeEl.querySelectorAll("[data-signature-clear]").forEach((btn) => {
+        if (btn.dataset.repeaterWired === "1") return;
+        btn.dataset.repeaterWired = "1";
         btn.addEventListener("click", () => {
           const path = btn.dataset.signatureClear;
           const canvas = container.querySelector(`[data-signature-canvas="${path}"]`);
@@ -1694,9 +2090,112 @@
           delete this.signatureDataStore[path];
         });
       });
+    }
 
-      // Evaluasi awal visibilitas kondisional + kolom terhitung
+    // ------------------------------------------------------------------
+    // GRUP FIELD DINAMIS / REPEATER - interaksi runtime (tambah/hapus baris)
+    // ------------------------------------------------------------------
+
+    // Mencari definisi field lewat path DOM-nya sendiri (dash-only, sama
+    // seperti path panel/repeater itu sendiri -- BUKAN path instance yang
+    // memakai "."). Dipakai saat runtime (mode isi form), berbeda dari
+    // getFieldByPath() milik builder yang beroperasi atas this.currentForm.
+    getFieldByRuntimePath(formDef, dashPath) {
+      const segments = String(dashPath).split("-").map(Number);
+      const section = formDef.sections && formDef.sections[segments[0]];
+      if (!section) return null;
+      let field = section.fields && section.fields[segments[1]];
+      for (let i = 2; i < segments.length; i += 1) {
+        if (!field || !Array.isArray(field.children)) return null;
+        field = field.children[segments[i]];
+      }
+      return field || null;
+    }
+
+    addRepeaterInstance(container, formDef, path) {
+      const field = this.getFieldByRuntimePath(formDef, path);
+      if (!field || !field.repeatable) return;
+      const instancesEl = container.querySelector(`[data-repeater-instances="${path}"]`);
+      if (!instancesEl) return;
+
+      const existingItems = Array.from(instancesEl.querySelectorAll(".repeater-instance"));
+      const max = Number.isFinite(field.repeatMax) ? Math.max(0, field.repeatMax) : 0;
+      if (max > 0 && existingItems.length >= max) {
+        showAlert(`Maksimal ${max} ${field.repeatItemLabel || "item"} untuk grup ini.`);
+        return;
+      }
+
+      const min = Number.isFinite(field.repeatMin) ? Math.max(0, field.repeatMin) : 1;
+      // Indeks baru = indeks tertinggi yang pernah dipakai + 1 (bukan
+      // sekadar jumlah instance saat ini), supaya tidak bertabrakan dengan
+      // instance yang masih ada setelah ada penghapusan di tengah (lihat
+      // catatan "tanpa reindex" pada removeRepeaterInstance()).
+      const existingIndices = existingItems.map((el) => Number(el.dataset.instanceIndex));
+      const newIndex = existingIndices.length ? Math.max(...existingIndices) + 1 : 0;
+
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = this.renderRepeaterInstance(field, path, newIndex, min, existingItems.length + 1, {
+        disabled: false,
+      }).trim();
+      const newEl = wrapper.firstElementChild;
+      if (!newEl) return;
+      instancesEl.appendChild(newEl);
+
+      this.wireControlWidgets(newEl, container, formDef);
+      this.updateRepeaterRemoveButtons(instancesEl, min);
+      this.relabelRepeaterInstances(instancesEl, field.repeatItemLabel || "Item");
       this.refreshFormState(container, formDef);
+    }
+
+    removeRepeaterInstance(container, formDef, path, instanceIndex) {
+      const field = this.getFieldByRuntimePath(formDef, path);
+      if (!field || !field.repeatable) return;
+      const instancesEl = container.querySelector(`[data-repeater-instances="${path}"]`);
+      if (!instancesEl) return;
+
+      const currentCount = instancesEl.querySelectorAll(".repeater-instance").length;
+      const min = Number.isFinite(field.repeatMin) ? Math.max(0, field.repeatMin) : 1;
+      if (currentCount <= min) {
+        showAlert(`Minimal ${min} ${field.repeatItemLabel || "item"} harus ada pada grup ini.`);
+        return;
+      }
+
+      const target = instancesEl.querySelector(`.repeater-instance[data-instance-index="${instanceIndex}"]`);
+      if (target) target.remove();
+
+      // Bersihkan data file/tanda-tangan milik instance yang dihapus
+      // (tersimpan di this.fileDataStore/this.signatureDataStore, bukan di
+      // DOM) supaya tidak tersisa sebagai data "hantu" saat submit.
+      const instancePrefix = `${path}.${instanceIndex}-`;
+      Object.keys(this.fileDataStore).forEach((key) => {
+        if (key.indexOf(instancePrefix) === 0) delete this.fileDataStore[key];
+      });
+      Object.keys(this.signatureDataStore).forEach((key) => {
+        if (key.indexOf(instancePrefix) === 0) delete this.signatureDataStore[key];
+      });
+
+      this.updateRepeaterRemoveButtons(instancesEl, min);
+      this.relabelRepeaterInstances(instancesEl, field.repeatItemLabel || "Item");
+      this.refreshFormState(container, formDef);
+    }
+
+    updateRepeaterRemoveButtons(instancesEl, min) {
+      const items = instancesEl.querySelectorAll(".repeater-instance");
+      items.forEach((el) => {
+        const btn = el.querySelector(".repeater-remove-btn");
+        if (btn) btn.disabled = items.length <= min;
+      });
+    }
+
+    // Perbarui nomor tampilan "#1, #2, ..." pada tiap instance yang masih
+    // ada -- kosmetik saja, TIDAK mengubah data-instance-index/path yang
+    // dipakai sebagai kunci data (lihat catatan di removeRepeaterInstance).
+    relabelRepeaterInstances(instancesEl, itemLabel) {
+      const items = instancesEl.querySelectorAll(".repeater-instance");
+      items.forEach((el, displayIndex) => {
+        const labelEl = el.querySelector(".repeater-instance-label");
+        if (labelEl) labelEl.textContent = `${itemLabel} #${displayIndex + 1}`;
+      });
     }
 
     // Membaca nilai satu field langsung dari elemen DOM-nya berdasarkan tipe.
@@ -1839,6 +2338,22 @@
           if (wrapper) {
             wrapper.style.display = visible ? "" : "none";
           }
+
+          if (field.type === "panel" && field.repeatable) {
+            // Grup berulang: setiap baris/instance punya nilai field
+            // sendiri-sendiri, jadi visibilitas kondisional anak-anaknya
+            // (misal dropdown -> field lain di baris yang sama) harus
+            // dievaluasi per-instance, bukan sekali untuk seluruh grup.
+            const instancesEl = container.querySelector(`[data-repeater-instances="${path}"]`);
+            if (instancesEl) {
+              instancesEl.querySelectorAll(".repeater-instance").forEach((instanceEl) => {
+                const instanceIndex = instanceEl.dataset.instanceIndex;
+                walk(field.children || [], `${path}.${instanceIndex}`, null, null);
+              });
+            }
+            return;
+          }
+
           if (field.children && field.children.length) {
             const currentValue = this.getFieldDomValue(container, field, path);
             walk(field.children, path, field, currentValue);
@@ -1919,6 +2434,13 @@
     // dari DOM saat ini, dipakai sebagai variabel `data` untuk kode
     // customjs -- berbeda dari collectSubmissionData() yang memvalidasi
     // dan hanya menyertakan field yang sedang tampil.
+    // Catatan keterbatasan (konsisten dengan gaya dokumentasi keterbatasan
+    // lain di file ini): field di dalam grup berulang (repeater) SENGAJA
+    // tidak disertakan di sini karena satu field bisa punya banyak nilai
+    // (satu per instance/baris) sehingga tidak bisa direpresentasikan
+    // sebagai satu `data.<nama>` tunggal untuk kode customjs. Custom JS
+    // Column & Auto Number hanya "melihat" field level atas / di luar
+    // grup berulang.
     collectAllFieldValues(container, formDef) {
       const data = {};
       const walk = (fields, pathPrefix) => {
@@ -1928,7 +2450,7 @@
             const key = field.name || "field_" + path;
             data[key] = this.getFieldDomValue(container, field, path);
           }
-          if (field.children && field.children.length) {
+          if (field.children && field.children.length && !field.repeatable) {
             walk(field.children, path);
           }
         });
@@ -1975,7 +2497,7 @@
               data[field.name || "field_" + path] = el.value;
             }
           }
-          if (field.children && field.children.length) {
+          if (field.children && field.children.length && !field.repeatable) {
             walk(field.children, path);
           }
         });
@@ -1994,6 +2516,11 @@
 
     // Mengumpulkan nilai submission secara rekursif mengikuti struktur form
     // (hanya field yang sedang terlihat yang divalidasi & disertakan).
+    // `targetData` adalah objek tujuan tempat pasangan key/value dituliskan
+    // -- untuk field biasa ini adalah `data` di level teratas, tapi untuk
+    // setiap instance/baris di dalam grup berulang ini adalah objek baru
+    // yang terisolasi per baris, supaya hasilnya berupa array of object
+    // (satu object per baris) pada key milik field panel berulang tersebut.
     collectSubmissionData(container, formDef) {
       const data = {};
       // errors: daftar terstruktur { path, field, message } dipakai untuk
@@ -2002,12 +2529,45 @@
       const errors = [];
       const missingLabels = [];
 
-      const walk = (fields, pathPrefix, parentField, parentValue) => {
+      const walk = (fields, pathPrefix, parentField, parentValue, targetData) => {
         (fields || []).forEach((field, idx) => {
           const path = `${pathPrefix}-${idx}`;
+
+          if (field.type === "panel" && field.repeatable) {
+            // Grup Field Dinamis / Repeater: kumpulkan satu object per
+            // baris/instance yang sedang ada di DOM, lalu simpan sebagai
+            // array pada key field ini (field.name).
+            const instancesEl = container.querySelector(`[data-repeater-instances="${path}"]`);
+            const instanceEls = instancesEl
+              ? Array.from(instancesEl.querySelectorAll(".repeater-instance"))
+              : [];
+            const instancesData = instanceEls.map((instanceEl) => {
+              const instanceIndex = instanceEl.dataset.instanceIndex;
+              const instanceData = {};
+              walk(field.children || [], `${path}.${instanceIndex}`, null, null, instanceData);
+              return instanceData;
+            });
+
+            const min = Number.isFinite(field.repeatMin) ? Math.max(0, field.repeatMin) : 1;
+            if (instancesData.length < min) {
+              const itemLabel = field.repeatItemLabel || "item";
+              missingLabels.push(
+                (field.label || field.name || "Grup Berulang") + ` (minimal ${min} ${itemLabel})`,
+              );
+              errors.push({
+                path,
+                field,
+                message: `Minimal ${min} ${itemLabel} harus diisi.`,
+              });
+            }
+
+            targetData[field.name || "field_" + path] = instancesData;
+            return;
+          }
+
           if (field.type === "html" || field.type === "panel") {
             if (field.children && field.children.length) {
-              walk(field.children, path, field, parentValue);
+              walk(field.children, path, field, parentValue, targetData);
             }
             return;
           }
@@ -2019,14 +2579,14 @@
 
           if (!visible) {
             if (field.children && field.children.length) {
-              walk(field.children, path, field, null);
+              walk(field.children, path, field, null, targetData);
             }
             return;
           }
 
           const value = this.getFieldDomValue(container, field, path);
           const key = field.name || "field_" + path;
-          data[key] = value;
+          targetData[key] = value;
 
           if (field.required && this.isFieldValueEmpty(field, value)) {
             missingLabels.push(field.label || key);
@@ -2039,13 +2599,13 @@
           }
 
           if (field.children && field.children.length) {
-            walk(field.children, path, field, value);
+            walk(field.children, path, field, value, targetData);
           }
         });
       };
 
       (formDef.sections || []).forEach((section, sIdx) => {
-        walk(section.fields || [], `${sIdx}`, null, null);
+        walk(section.fields || [], `${sIdx}`, null, null, data);
       });
 
       return { data, missingLabels, errors };
