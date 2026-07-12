@@ -1,7 +1,7 @@
 # SAKA TRACKER — Technical Specification (SKILL.md)
   
 **App:** Saka Tracker — SE2026 SLS Progress Monitoring
-**Version documented:** v5.8.2 (Build 20260712)
+**Version documented:** v5.8.3 (Build 20260712)
 **Type:** Single-file client-side web app (HTML+CSS+JS, no backend, no build step) with a companion `manifest.json` + `sw.js` for PWA install/offline support
 **Storage:** Browser `localStorage`, key `saka_tracker_v5_4` (referenced via the `STORAGE_KEY` constant since v5.5.0; the literal key itself is unchanged for backward compatibility)
 **Author role documented for:** Saka_Omni (internal field-ops tooling)
@@ -364,6 +364,7 @@ Changelog entries live as a small inline note block inside the Settings `.app-in
 
 | Version | Change |
 |---|---|
+| v5.8.3 | Added interactive reposition (move up/down) for **any** field in the Form Builder — top-level or nested child, any depth, including panels/repeater groups and their own children — via `moveBuilderField(sectionIndex, path, depth, direction)`. Buttons auto-disable at the first/last position within a field's own sibling list. Bumped `FORMGEAR_ENGINE_VERSION` to `1.3.0` (builder-logic only; schema unchanged). |
 | v5.8.2 | Extended Grup Field Dinamis / Repeater's builder selection to **any depth** (nested child fields, not just top-level), with precise `visibleIfValue` conflict resolution done purely by field identity — see the "Mixed-depth selection & precise conflict resolution" part of §15.6. Bumped `FORMGEAR_ENGINE_VERSION` to `1.2.0` (builder-logic change only; `FORMGEAR_SCHEMA_VERSION` stays `1.1.0`, no stored data shape changed). |
 | v5.8.1 | Added **Grup Field Dinamis / Repeater** to FormGear: a `panel` field can now be marked `repeatable` so its children render as N duplicable rows/instances at fill-time (e.g. multiple Kepala Keluarga per house). Bumped `FORMGEAR_ENGINE_VERSION`/`FORMGEAR_SCHEMA_VERSION` to `1.1.0` with an automatic migration in `migrateFormDefinition()` that back-fills `repeatable:false` on pre-existing panels. See §15.6. |
 | v5.8.0 | Added independent Semantic Versioning for FormGear, see §15.5: `FORMGEAR_ENGINE_VERSION` (templating engine), `schemaVersion` (form-definition data shape), and a per-form `templateVersion` that auto-bumps PATCH on every save. Older forms are auto-migrated to the new fields on load via `migrateFormDefinition()`. This does not change `APP_VERSION`/`LEGAL_VERSION` of the Saka Tracker app itself. |
@@ -462,6 +463,14 @@ The net effect: selecting a choice-type field together with its own `visibleIfVa
 **Submission shape:** `collectSubmissionData()` recognizes a repeatable panel and outputs an **array of one object per row** on that field's `name` key (each row's own field values keyed as usual), rather than flattening into the parent object. Rows below `repeatMin` produce a blocking inline error on the group itself.
 
 **Known limitation (by design):** `collectAllFieldValues()`/`recalculateComputedFields()` (used by `autonumber`/`customjs` field types) deliberately do **not** descend into a repeatable panel's children — a Custom JS Column formula can't reference a value that may exist zero-to-many times per submission. Auto Number and Custom JS Column can only see fields that live outside a repeater group.
+
+### 15.7 Reposisi Interaktif Field (v1.3.0)
+
+Every field card in the Form Builder — top-level or nested child, at any depth, including a `panel`/repeater group and the fields living inside it — has a pair of "▲"/"▼" buttons (`.field-move-btn`) that call `moveBuilderField(sectionIndex, path, depth, direction)`. This swaps the field one position with its immediate neighbor **within its own sibling list** — `section.fields` for a top-level field, or the immediate parent's `children` array for a nested one — using the same depth-agnostic path-parsing pattern as `removeBuilderField()`/`getFieldByPath()`. `direction` is `-1` (up) or `+1` (down); moving past either end of the list is a no-op.
+
+Each button's `disabled` state is computed at render time from `siblingIndex`/`siblingCount`, two extra parameters threaded through `renderBuilderField()` by its two callers (`renderBuilderFields()` for the top-level list, and the `childFields.map(...)` recursive call for nested children) — so the UI never needs a runtime bounds check to look right, though `moveBuilderField()` still guards its own bounds defensively in case a stale click gets through.
+
+This is a pure ordering operation — it never touches `visibleIfValue`, `repeatable`, or any other field property, and it operates identically regardless of whether group-selection mode (§15.6) is simultaneously active on the section.
 
 ---
 

@@ -714,6 +714,22 @@
   padding: 8px 16px;
 }
 
+.field-move-btn {
+  width: auto;
+  padding: 6px 10px;
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+.formgear-builder-field .field-actions button.field-move-btn {
+  min-width: 0;
+}
+
+.field-move-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 /* ==========================================================================
    ADVANCED FIELDS: Auto Number & Custom JS Column + AI badges/panels
    ========================================================================== */

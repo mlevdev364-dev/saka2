@@ -4,7 +4,7 @@
  
 **Monitoring progres lapangan SLS, real-time, offline-ready.**
 
-![Version](https://img.shields.io/badge/version-5.8.2-3b82f6?style=flat-square)
+![Version](https://img.shields.io/badge/version-5.8.3-3b82f6?style=flat-square)
 ![Status](https://img.shields.io/badge/status-stable-10b981?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-installable-10b981?style=flat-square)
 ![Build Step](https://img.shields.io/badge/build_step-none-f59e0b?style=flat-square)
@@ -168,6 +168,7 @@ Seluruh indikator visual dalam aplikasi menggunakan [Bootstrap Icons](https://ic
 
 | Versi | Ringkasan |
 |---|---|
+| 5.8.3 | Setiap field di Form Builder — level atas maupun child field bersarang di kedalaman apa pun, termasuk panel/grup berulang dan field di dalamnya — sekarang bisa direposisi secara interaktif lewat tombol naik/turun (▲▼) di antara sibling-nya sendiri. Tombol otomatis nonaktif saat sudah di posisi paling atas/bawah. |
 | 5.8.2 | Grup Field Dinamis / Repeater kini bisa dibuat dari field level atas **maupun child field bersarang** (kedalaman apa pun), dengan resolusi konflik `visibleIfValue` yang presisi berbasis identitas objek: field yang dicentang bersama induknya tetap bersarang utuh, field yang dicentang sendirian tanpa induknya otomatis dilepas `visibleIfValue`-nya. Posisi sisip grup tetap tepat walau penghapusan terjadi di banyak kedalaman sekaligus. |
 | 5.8.1 | Ditambahkan fitur FormGear **Grup Field Dinamis / Repeater**: sebuah `panel` field bisa ditandai "berulang" sehingga field-field di dalamnya dapat digandakan berkali-kali saat mengisi form (contoh: banyak Kepala Keluarga dalam 1 rumah). Form Builder punya mode seleksi untuk menjadikan beberapa field yang sudah ada sebagai satu grup berulang, plus operasi ungroup. `FORMGEAR_ENGINE_VERSION`/`schemaVersion` naik ke `1.1.0` dengan migrasi otomatis untuk form lama. |
 | 5.8.0 | FormGear kini punya versioning semVer sendiri, terpisah dari `APP_VERSION` Saka Tracker dan dari versi masing-masing form: `FORMGEAR_ENGINE_VERSION` (versi engine), `schemaVersion` (versi bentuk-data), dan `templateVersion` per-form (naik PATCH otomatis tiap disimpan ulang). Form lama otomatis dimigrasi saat dimuat. Badge versi ditampilkan di toolbar Form Builder dan di kartu katalog form. |
@@ -386,7 +387,7 @@ formgear-server/
 
 <div align="center">
 
-Saka Tracker v5.8.2 &middot; Alat bantu internal monitoring SE2026  
+Saka Tracker v5.8.3 &middot; Alat bantu internal monitoring SE2026  
 FormGear Pro removed — replaced by SurveyJS fullstack scaffold in /surveyjs-app
 
 </div>

@@ -30,7 +30,7 @@
   // Ringkasan tiga lapis versi yang TIDAK saling terikat:
   //   APP_VERSION (index.html)  != FORMGEAR_ENGINE_VERSION (engine ini)
   //   != FORMGEAR_SCHEMA_VERSION (bentuk data)  != templateVersion (per-form)
-  const FORMGEAR_ENGINE_VERSION = "1.2.0";
+  const FORMGEAR_ENGINE_VERSION = "1.3.0";
   const FORMGEAR_SCHEMA_VERSION = "1.1.0";
 
   function bumpPatchVersion(version) {
@@ -783,7 +783,7 @@
       }
       return section.fields
         .map((field, fieldIndex) =>
-          this.renderBuilderField(sectionIndex, fieldIndex, field, 0, null),
+          this.renderBuilderField(sectionIndex, fieldIndex, field, 0, null, fieldIndex, section.fields.length),
         )
         .join("");
     }
@@ -1060,7 +1060,7 @@
       return "";
     }
 
-    renderBuilderField(sectionIndex, fieldIndex, field, depth, parentField) {
+    renderBuilderField(sectionIndex, fieldIndex, field, depth, parentField, siblingIndex, siblingCount) {
       const indentStyle = depth > 0 ? "margin-left: " + depth * 12 + "px;" : "";
       const childFields = Array.isArray(field.children) ? field.children : [];
       const isStatic =
@@ -1161,10 +1161,12 @@
                     ${this.renderBuilderTypeEditor(field, sectionIndex, fieldIndex, depth)}
                     ${visibleIfEditor}
                     <div class="field-actions">
+                        <button class="btn-outline field-move-btn" ${!(siblingIndex > 0) ? "disabled" : ""} title="Naikkan posisi" onclick="FormGearBuilderInstance.moveBuilderField(${sectionIndex}, '${fieldIndex}', ${depth}, -1)"><i class="bi bi-arrow-up"></i></button>
+                        <button class="btn-outline field-move-btn" ${!(siblingCount && siblingIndex < siblingCount - 1) ? "disabled" : ""} title="Turunkan posisi" onclick="FormGearBuilderInstance.moveBuilderField(${sectionIndex}, '${fieldIndex}', ${depth}, 1)"><i class="bi bi-arrow-down"></i></button>
                         <button class="btn-outline" onclick="FormGearBuilderInstance.addBuilderChildField(${sectionIndex}, '${fieldIndex}', ${depth})"><i class="bi bi-arrow-return-right"></i> Tambah Child Field</button>
                         <button class="btn-danger" onclick="FormGearBuilderInstance.removeBuilderField(${sectionIndex}, '${fieldIndex}', ${depth})"><i class="bi bi-trash3"></i> Hapus Field</button>
                     </div>
-                    ${childFields.map((child, childIndex) => this.renderBuilderField(sectionIndex, `${fieldIndex}-${childIndex}`, child, depth + 1, field)).join("")}
+                    ${childFields.map((child, childIndex) => this.renderBuilderField(sectionIndex, `${fieldIndex}-${childIndex}`, child, depth + 1, field, childIndex, childFields.length)).join("")}
                 </div>
             `;
     }
@@ -1285,6 +1287,36 @@
         if (!parent || !Array.isArray(parent.children)) return;
         parent.children.splice(indices[indices.length - 1], 1);
       }
+      this.renderBuilderPage();
+    }
+
+    // Reposisi interaktif: geser satu field (level atas ATAU child
+    // bersarang, di kedalaman apa pun) satu langkah ke atas/bawah di
+    // antara sibling-nya sendiri (array `children` induknya, atau
+    // `section.fields` bila field ini level atas). `direction` bernilai
+    // -1 (naik) atau +1 (turun). Tombol di UI sudah otomatis nonaktif
+    // begitu field berada di posisi paling atas/bawah dalam daftar
+    // sibling-nya (lihat renderBuilderField), tapi guard di sini tetap
+    // dijaga sebagai pengaman kedua terhadap klik yang lolos.
+    moveBuilderField(sectionIndex, path, depth, direction) {
+      if (!this.currentForm) return;
+      const indices = String(path).split("-").map(Number);
+      let container;
+      if (indices.length === 1) {
+        const section = this.currentForm.sections[sectionIndex];
+        if (!section) return;
+        container = section.fields;
+      } else {
+        const parentPath = indices.slice(0, -1).join("-");
+        const parent = this.getFieldByPath(sectionIndex, parentPath, depth - 1);
+        if (!parent || !Array.isArray(parent.children)) return;
+        container = parent.children;
+      }
+      const currentIndex = indices[indices.length - 1];
+      const targetIndex = currentIndex + direction;
+      if (targetIndex < 0 || targetIndex >= container.length) return;
+      const [moved] = container.splice(currentIndex, 1);
+      container.splice(targetIndex, 0, moved);
       this.renderBuilderPage();
     }
 

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title id="app-title">Saka Tracker V5.8.2 - Stable</title>
+    <title id="app-title">Saka Tracker V5.8.3 - Stable</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="assets/formgear/formgear-v2.css">
     <!-- PWA Meta Tags -->
@@ -1934,6 +1934,11 @@
                 <div
                     style="margin-bottom: 8px; font-size: 0.68rem; color: var(--text-muted); background:#0b1120; border:1px solid var(--border); border-radius:8px; padding:6px 8px; text-align:left;">
                     <strong style="color:var(--text-main); font-size:0.7rem;"><i class="bi bi-clock-history"></i>
+                        v5.8.3</strong> — Setiap field di Form Builder (level atas maupun child field bersarang di
+                    kedalaman apa pun, termasuk panel/grup berulang) sekarang bisa direposisi secara interaktif
+                    lewat tombol naik/turun (▲▼) di antara sibling-nya sendiri. Tombol otomatis nonaktif saat
+                    field sudah di posisi paling atas/bawah dalam daftarnya.<br>
+                    <strong style="color:var(--text-main); font-size:0.7rem;"><i class="bi bi-clock-history"></i>
                         v5.8.2</strong> — Grup Field Dinamis / Repeater kini bisa dibuat dari field di kedalaman
                     apa pun (bukan cuma field level atas), termasuk child field bersarang di bawah field pilihan
                     (choice). Konflik <code>visibleIfValue</code> diselesaikan secara presisi berbasis identitas
@@ -2114,7 +2119,7 @@
         //   - README.md   -> badge/judul versi
         // Ketidaksesuaian antar file akan terdeteksi otomatis saat runtime dan
         // dicatat sebagai console.warn (lihat checkVersionSync & checkManifestVersionSync).
-        const APP_VERSION = "5.8.2";
+        const APP_VERSION = "5.8.3";
         const BUILD_DATE = "20260712";
         const LEGAL_VERSION = "5.6.0"; // versi dokumen ToS/Privacy - naik hanya saat isi legal berubah
         const STORAGE_KEY = "saka_tracker_v5_4"; // kunci localStorage historis, tidak diubah agar data pengguna lama tetap kompatibel
